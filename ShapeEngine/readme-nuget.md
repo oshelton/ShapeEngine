@@ -9,6 +9,14 @@ When using Shape Engine everything from Raylib is available as well. ([Raylib Ex
 
 ### *[Release Trailer](https://youtu.be/fmx9zICSe3Q)*
 
+## Fork Details (Owen Shelton)
+
+This fork of ShapeEngine contains changes more inline with my project needs and coding philosophiesas well as support for a few things that ShapeEngine doesn't support out of the box including:
+
+- A more flexible definition for scenes.
+- Support for [R3](https://github.com/Cysharp/R3).
+- Some minor architectural changes to the core Game class.
+
 ## Getting Started & Documentation
 
 This repository includes an **Examples Project** to showcase the capabilities of ShapeEngine and help you get started quickly. Explore the examples to see what’s possible and how to implement different features.
