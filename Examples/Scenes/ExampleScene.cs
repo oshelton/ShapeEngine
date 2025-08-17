@@ -80,18 +80,6 @@ namespace Examples.Scenes
             }
             
             HandleZoom(dt);
-            // float zoomIncrement = 0.05f;
-            // var zoomInState = input.ConsumeAction(GameloopExamples.InputZoomInID);
-            // if (zoomInState is { Consumed: false, Pressed: true })
-            // {
-            //     GAMELOOP.Camera.Zoom(-zoomIncrement);
-            // }
-            //
-            // var zoomOutState = input.ConsumeAction(GameloopExamples.InputZoomOutID);
-            // if (zoomOutState is { Consumed: false, Pressed: true })
-            // {
-            //     GAMELOOP.Camera.Zoom(zoomIncrement);
-            // }
         }
 
         protected override void OnUpdate(GameTime time, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
@@ -123,10 +111,8 @@ namespace Examples.Scenes
             }
             
             OnDrawGameUIExample(gameUi);
-
-            
-            
         }
+        
         protected override void OnDrawUI(ScreenInfo ui)
         {
             // var backRect = ui.Area.ApplyMargins(0.012f, 0.85f, 0.012f, 0.95f);
@@ -144,7 +130,7 @@ namespace Examples.Scenes
                     var acceptMouseState = GameloopExamples.Instance.InputActionUIAcceptMouse.Consume(out _);
                     
                     // if (GAMELOOP.InputActionUIAccept.State.Pressed || GAMELOOP.InputActionUIAcceptMouse.State.Pressed)// ShapeInput.MouseDevice.GetButtonState(ShapeMouseButton.LEFT).Pressed)
-                    if (acceptState is {Consumed:false, Pressed:true} || acceptMouseState is {Consumed:false, Pressed:true})// ShapeInput.MouseDevice.GetButtonState(ShapeMouseButton.LEFT).Pressed)
+                    if (acceptState is { Consumed: false, Pressed: true } || acceptMouseState is { Consumed: false, Pressed: true })// ShapeInput.MouseDevice.GetButtonState(ShapeMouseButton.LEFT).Pressed)
                     {
                         if (IsCancelAllowed())
                         {
@@ -172,7 +158,7 @@ namespace Examples.Scenes
 
             var deviceRect = GameloopExamples.Instance.UIRects.GetRect("bottom left"); // GetRect("bottom", "left"); // Get("bottom").Get("left").GetRect();
             DrawInputDeviceInfo(deviceRect);
-            
+
             OnDrawUIExample(ui);
         }
         
@@ -221,8 +207,6 @@ namespace Examples.Scenes
             GameloopExamples.Instance.Camera.Reset();
             GameloopExamples.Instance.ResetCamera();
         }
-
-
 
         public static Vector2 CalculateMouseMovementDirection(Vector2 mousePos, ShapeCamera camera)
         {

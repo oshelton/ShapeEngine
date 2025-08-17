@@ -80,3 +80,5 @@ GPATH
 GRTAGS
 GTAGS
 .vs
+
+imgui.ini

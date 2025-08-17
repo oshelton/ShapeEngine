@@ -30,10 +30,10 @@ public readonly struct GameSettings
     /// <summary>
     /// Creates a new GameSettings instance with pixelation mode.
     /// </summary>
-    public static GameSettings PixelationMode =>  
+    public static GameSettings PixelationMode =>
         new GameSettings(0.25f, -1, TextureFilter.Point, ShaderSupportType.Multi);
     #endregion
-   
+
     #region Constructors
 
     /// <summary>
@@ -42,7 +42,7 @@ public readonly struct GameSettings
     /// <param name="fixedFramerate">The fixed framerate for the fixed update loop.</param>
     /// <param name="textureFilter">The texture filter to be used.</param>
     /// <param name="shaderSupportType">The shader support type.</param>
-    public GameSettings(int fixedFramerate, TextureFilter textureFilter, ShaderSupportType shaderSupportType)
+    public GameSettings(int fixedFramerate, TextureFilter textureFilter, ShaderSupportType shaderSupportType, bool imguiEnabled = true)
     {
         FixedFramerate = fixedFramerate;
         TextureFilter = textureFilter;
@@ -50,6 +50,7 @@ public readonly struct GameSettings
         FixedDimensions = Dimensions.GetInvalidDimension();
         PixelationFactor = 1f;
         ScreenTextureMode = ScreenTextureMode.Stretch;
+        ImguiEnabled = imguiEnabled;
     }
 
     /// <summary>
@@ -60,7 +61,7 @@ public readonly struct GameSettings
     /// <param name="textureFilter">The texture filter to be used.</param>
     /// <param name="shaderSupportType">The shader support type.</param>
     /// <param name="nearestScaling">A value indicating whether the nearest scaling should be used.</param>
-    public GameSettings(Dimensions fixedDimensions, int fixedFramerate, TextureFilter textureFilter, ShaderSupportType shaderSupportType, bool nearestScaling = false)
+    public GameSettings(Dimensions fixedDimensions, int fixedFramerate, TextureFilter textureFilter, ShaderSupportType shaderSupportType, bool nearestScaling = false, bool imguiEnabled = true)
     {
         FixedFramerate = fixedFramerate;
         TextureFilter = textureFilter;
@@ -70,7 +71,7 @@ public readonly struct GameSettings
         if (fixedDimensions.IsValid())
         {
             FixedDimensions = fixedDimensions;
-        
+
             if (nearestScaling)
             {
                 ScreenTextureMode = ScreenTextureMode.NearestFixed;
@@ -85,6 +86,8 @@ public readonly struct GameSettings
             FixedDimensions = Dimensions.GetInvalidDimension();
             ScreenTextureMode = ScreenTextureMode.Stretch;
         }
+
+        ImguiEnabled = imguiEnabled;
     }
 
     /// <summary>
@@ -94,7 +97,7 @@ public readonly struct GameSettings
     /// <param name="fixedFramerate">The fixed framerate for the fixed update loop.</param>
     /// <param name="textureFilter">The texture filter to be used.</param>
     /// <param name="shaderSupportType">The shader support type.</param>
-    public GameSettings(float pixelationFactor, int fixedFramerate, TextureFilter textureFilter, ShaderSupportType shaderSupportType)
+    public GameSettings(float pixelationFactor, int fixedFramerate, TextureFilter textureFilter, ShaderSupportType shaderSupportType, bool imguiEnabled = true)
     {
         FixedFramerate = fixedFramerate;
         TextureFilter = textureFilter;
@@ -111,25 +114,27 @@ public readonly struct GameSettings
             PixelationFactor = pixelationFactor;
             ScreenTextureMode = ScreenTextureMode.Pixelation;
         }
+
+        ImguiEnabled = imguiEnabled;
     }
-    
+
     #endregion
-    
+
     #region Properties
     /// <summary>
     /// Gets the screen texture mode.
     /// </summary>
     public readonly ScreenTextureMode ScreenTextureMode;
-    
-   /// <summary>
-   /// Gets the fixed framerate used for the fixed update loop.
-   /// <list type="bullet">
-   /// <item>The physics update uses a delta time of <c>1 / FixedFramerate</c>.</item>
-   /// <item>If set to 0 or less, the fixed update loop is disabled and <c>FixedUpdate</c>/<c>InterpolateFixedUpdate</c> will not be called.</item>
-   /// <item>Values greater than 0 but less than 30 are clamped to 30.</item>
-   /// <item>When enabled, the physics update runs after the normal update function.</item>
-   /// </list>
-   /// </summary>
+
+    /// <summary>
+    /// Gets the fixed framerate used for the fixed update loop.
+    /// <list type="bullet">
+    /// <item>The physics update uses a delta time of <c>1 / FixedFramerate</c>.</item>
+    /// <item>If set to 0 or less, the fixed update loop is disabled and <c>FixedUpdate</c>/<c>InterpolateFixedUpdate</c> will not be called.</item>
+    /// <item>Values greater than 0 but less than 30 are clamped to 30.</item>
+    /// <item>When enabled, the physics update runs after the normal update function.</item>
+    /// </list>
+    /// </summary>
     public readonly int FixedFramerate;
 
     /// <summary>
@@ -151,5 +156,10 @@ public readonly struct GameSettings
     /// Gets the pixelation factor for the game window.
     /// </summary>
     public readonly float PixelationFactor;
+
+    /// <summary>
+    /// If Imgui support is enabled or not.
+    /// </summary>
+    public readonly bool ImguiEnabled;
     #endregion
 }

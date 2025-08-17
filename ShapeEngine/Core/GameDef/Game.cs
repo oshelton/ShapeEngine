@@ -248,13 +248,15 @@ public partial class Game
     /// </summary>
     /// <returns>The current ScreenTexture instance used by the game.</returns>
     public ScreenTexture GetGameTexture() => gameTexture;
+    
+    public bool ImguiEnabled { get; } 
 
     /// <summary>
     /// Gets the input manager for handling keyboard, mouse, and gamepad input.
     /// </summary>
     public readonly InputSystem Input;
     #endregion
-    
+
     #region Private Members
 
     private ScreenTexture gameTexture;
@@ -271,7 +273,7 @@ public partial class Game
 
     private List<ScreenTexture>? customScreenTextures;
     #endregion
-    
+
     #region Constructor
 
     
@@ -325,8 +327,8 @@ public partial class Game
         #if DEBUG
         DebugMode = true;
         ReleaseMode = false;
-        #endif
-        
+#endif
+
         // this.DevelopmentDimensions = gameSettings.DevelopmentDimensions;
         Window = new(windowSettings);
         Window.OnWindowSizeChanged += ResolveOnWindowSizeChanged;
@@ -336,8 +338,8 @@ public partial class Game
         Window.OnMouseEnabledChanged += ResolveOnMouseEnabledChanged;
         Window.OnMouseEnteredScreen += ResolveOnMouseEnteredScreen;
         Window.OnMouseLeftScreen += ResolveOnMouseLeftScreen;
-        
-        
+
+
         Window.OnWindowFocusChanged += ResolveOnWindowFocusChanged;
         Window.OnWindowFullscreenChanged += ResolveOnWindowFullscreenChanged;
         Window.OnWindowMaximizeChanged += ResolveOnWindowMaximizeChanged;
@@ -356,16 +358,17 @@ public partial class Game
         }
         else
         {
-            if (fixedFramerate < 30) fixedFramerate = 30;
+            if (fixedFramerate < 30)
+                fixedFramerate = 30;
             FixedPhysicsFramerate = fixedFramerate;
             FixedPhysicsTimestep = 1f / FixedPhysicsFramerate;
             FixedPhysicsEnabled = true;
         }
-        
+
         curCamera = basicCamera;
         curCamera.Activate();
         curCamera.SetSize(Window.CurScreenSize);
-        
+
         var mousePosUI = Window.MousePosition;
 
         var screenTextureMode = gameSettings.ScreenTextureMode;
@@ -385,12 +388,12 @@ public partial class Game
         {
             gameTexture = new(gameSettings.PixelationFactor, gameSettings.ShaderSupportType, gameSettings.TextureFilter);
         }
-        
+
         gameTexture.OnTextureResized += GameTextureOnTextureResized;
         gameTexture.Initialize(Window.CurScreenSize, mousePosUI, curCamera);
         gameTexture.OnDrawGame += GameTextureOnDrawGame;
         gameTexture.OnDrawUI += GameTextureOnDrawUI;
-        
+
         GameScreenInfo = gameTexture.GameScreenInfo;
         GameUiScreenInfo = gameTexture.GameUiScreenInfo;
         UIScreenInfo = new(Window.ScreenArea, mousePosUI);
@@ -410,8 +413,11 @@ public partial class Game
             {
                 Directory.SetCurrentDirectory(exeDir);
             }
-            else Console.WriteLine("Failed to set current directory to executable's folder in macos.");
+            else
+                Console.WriteLine("Failed to set current directory to executable's folder in macos.");
         }
+
+        ImguiEnabled = gameSettings.ImguiEnabled;
     }
     #endregion
 

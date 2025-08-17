@@ -2,6 +2,9 @@ using Raylib_cs;
 using ShapeEngine.Core.Structs;
 using ShapeEngine.Input;
 using ShapeEngine.Screen;
+using rlImGui_cs;
+using System.Security.Cryptography.X509Certificates;
+using ImGuiNET;
 
 namespace ShapeEngine.Core.GameDef;
 
@@ -18,6 +21,11 @@ public partial class Game
         Input.Mouse.OnButtonReleased += MouseButtonReleased;
         Input.GamepadManager.OnGamepadButtonPressed += GamepadButtonPressed;
         Input.GamepadManager.OnGamepadButtonReleased += GamepadButtonReleased;
+
+        if (ImguiEnabled)
+        {
+            rlImGui.Setup(true);
+        }
 
         LoadContent();
         BeginRun();
@@ -38,7 +46,15 @@ public partial class Game
 
             Window.Update(dt);
             AudioDevice.Update(dt, curCamera);
-            Input.Update(dt);
+
+            if (!ImguiEnabled || !(ImGui.GetIO().WantCaptureKeyboard || ImGui.GetIO().WantCaptureMouse))
+            {
+                Input.Update(dt);
+            }
+            else
+            {
+                InputSystem.Lock();
+            }
 
             if (Window.MouseOnScreen)
             {
@@ -75,10 +91,11 @@ public partial class Game
                 ResolveUpdate(true);
                 AdvanceFixedUpdate(dt);
             }
-            else ResolveUpdate(false);
+            else
+                ResolveUpdate(false);
 
             DrawToScreen();
-
+            
             ResolveDeferred();
 
             Input.EndFrame();
@@ -158,9 +175,20 @@ public partial class Game
         customScreenTexturesDrawBefore?.Clear();
         customScreenTexturesDrawAfter?.Clear();
 
+        if (ImguiEnabled)
+        {
+            rlImGui.Begin();
+        }
+
         ResolveDrawUI(UIScreenInfo);
 
-        if (Window.MouseOnScreen) DrawCursorUi(UIScreenInfo);
+        if (ImguiEnabled)
+        {
+            rlImGui.End();
+        }
+
+        if (Window.MouseOnScreen)
+                DrawCursorUi(UIScreenInfo);
 
         Raylib.EndDrawing();
     }
@@ -168,6 +196,12 @@ public partial class Game
     private void EndGameloop()
     {
         EndRun();
+
+        if (ImguiEnabled)
+        {
+            rlImGui.Shutdown();
+        }
+
         UnloadContent();
         Window.Close();
         gameTexture.Unload();
