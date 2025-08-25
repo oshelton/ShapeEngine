@@ -26,6 +26,7 @@ public partial class Game
         {
             rlImGui.Setup(true);
         }
+        InputSystem.ImguiEnabled = ImguiEnabled;
 
         LoadContent();
         BeginRun();
@@ -47,14 +48,7 @@ public partial class Game
             Window.Update(dt);
             AudioDevice.Update(dt, curCamera);
 
-            if (!ImguiEnabled || !(ImGui.GetIO().WantCaptureKeyboard || ImGui.GetIO().WantCaptureMouse))
-            {
-                Input.Update(dt);
-            }
-            else
-            {
-                InputSystem.Lock();
-            }
+            Input.Update(dt);
 
             if (Window.MouseOnScreen)
             {

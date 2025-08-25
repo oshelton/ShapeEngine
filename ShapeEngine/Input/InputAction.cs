@@ -1,4 +1,5 @@
 using System.Text;
+using ImGuiNET;
 using ShapeEngine.Core;
 using ShapeEngine.StaticLib;
 
@@ -355,7 +356,8 @@ public class InputAction : IComparable<InputAction>, ICopyable<InputAction>, IEq
     {
         inputDeviceType = InputDeviceType.None;
         if (!Active) return false;
-        if (InputSystem.Locked && !InputSystem.HasAccess(AccessTag))
+        if ((InputSystem.Locked && !InputSystem.HasAccess(AccessTag)) ||
+            (InputSystem.ImguiEnabled && (ImGui.GetIO().WantCaptureKeyboard || ImGui.GetIO().WantCaptureMouse) && AccessTag != InputSystem.AllAccessTag))
         {
             Reset();//Good idea? It does not update anything, therefore, it should be reset.
             return false;

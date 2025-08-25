@@ -1,3 +1,4 @@
+using ImGuiNET;
 using ShapeEngine.Core.Structs;
 
 namespace ShapeEngine.Input;
@@ -131,14 +132,19 @@ public sealed class InputSystem
     /// </summary>
     internal void Update(float dt)
     {
-        if (InputDeviceSelectionCooldownActive)
+        if (ImguiEnabled && (ImGui.GetIO().WantCaptureKeyboard || ImGui.GetIO().WantCaptureMouse))
         {
-            inputDeviceSelectionCooldownTimer -= dt;
-            if (inputDeviceSelectionCooldownTimer <= 0f)
-            {
-                inputDeviceSelectionCooldownTimer = 0f;
-            }
+            return;
         }
+
+        if (InputDeviceSelectionCooldownActive)
+            {
+                inputDeviceSelectionCooldownTimer -= dt;
+                if (inputDeviceSelectionCooldownTimer <= 0f)
+                {
+                    inputDeviceSelectionCooldownTimer = 0f;
+                }
+            }
         
         if (InputActionDeviceSelectionCooldownActive)
         {
@@ -262,6 +268,9 @@ public sealed class InputSystem
     /// All <see cref="InputAction"/>s and input request with an access tag contained in the lock blacklist will not be processed.
     /// </summary>
     public static bool Locked { get; private set; }
+
+    //Whether ImGui is globally enabled or not.
+    public static bool ImguiEnabled { get; set; }
 
     private static BitFlag lockWhitelist;
     private static BitFlag lockBlacklist;

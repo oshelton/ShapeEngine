@@ -24,10 +24,12 @@ public class ImguiDemoScene : ExampleScene
         Description = "A window presenting the ImGui demo window";
 
         var increaseScaleKb = new InputTypeKeyboardButton(ShapeKeyboardButton.PERIOD);
-        increaseFontScaleAction = new(new InputActionSettings(), increaseScaleKb);
+        increaseFontScaleAction = new(InputSystem.NextAccessTag, new InputActionSettings(), increaseScaleKb);
+        increaseFontScaleAction.Title = "Increase Font Scale";
 
         var decreaseScaleKb = new InputTypeKeyboardButton(ShapeKeyboardButton.COMMA);
-        decreaseFontScaleAction = new(new InputActionSettings(), decreaseScaleKb);
+        decreaseFontScaleAction = new(InputSystem.NextAccessTag, new InputActionSettings(), decreaseScaleKb);
+        decreaseFontScaleAction.Title = "Decrease Font Scale";
 
         var increaseFontScaleText = increaseFontScaleAction.GetInputTypeDescription(InputDeviceType.Keyboard, false, 1, false);
         var decreaseFontScaleText = decreaseFontScaleAction.GetInputTypeDescription(InputDeviceType.Keyboard, false, 1, false);
