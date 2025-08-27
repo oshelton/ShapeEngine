@@ -69,6 +69,7 @@ namespace Examples.Scenes
             examples.Add(new PathfinderExample2());
 
             examples.Add(new ImguiDemoScene());
+            examples.Add(new R3DemoScene());
             
             buttonContainer = new ControlNodeContainer
             {

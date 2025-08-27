@@ -5,6 +5,8 @@ using ShapeEngine.Screen;
 using rlImGui_cs;
 using System.Security.Cryptography.X509Certificates;
 using ImGuiNET;
+using ShapeEngine.Timing.R3;
+using R3;
 
 namespace ShapeEngine.Core.GameDef;
 
@@ -21,6 +23,11 @@ public partial class Game
         Input.Mouse.OnButtonReleased += MouseButtonReleased;
         Input.GamepadManager.OnGamepadButtonPressed += GamepadButtonPressed;
         Input.GamepadManager.OnGamepadButtonReleased += GamepadButtonReleased;
+
+        // TODO: Handle unhandled exceptions.
+        // ObservableSystem.RegisterUnhandledExceptionHandler += ...;        
+        ObservableSystem.DefaultTimeProvider = ReactiveTimeProvider.Update;
+        ObservableSystem.DefaultFrameProvider = ReactiveFrameProvider.Update;
 
         if (ImguiEnabled)
         {
@@ -47,6 +54,9 @@ public partial class Game
 
             Window.Update(dt);
             AudioDevice.Update(dt, curCamera);
+
+            ReactiveFrameProvider.Update.Tick();
+            ReactiveTimeProvider.Update.Tick(Time);
 
             Input.Update(dt);
 
