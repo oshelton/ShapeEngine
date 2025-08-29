@@ -1,5 +1,7 @@
 using System.Numerics;
 using ImGuiNET;
+using R3;
+using ShapeEngine.Core;
 using ShapeEngine.Core.Structs;
 using ShapeEngine.Geometry.CircleDef;
 using ShapeEngine.Input;
@@ -15,7 +17,8 @@ public class ImguiDemoScene : ExampleScene
     private const float minFontScale = 0.5f;
     private const float maxFontScale = 3.0f;
     private float currentFontScale = 1.0f;
-    private string instructions = "";
+    private readonly string instructions = "";
+    private readonly CompositeDisposable subscriptions = new CompositeDisposable();
 
     public ImguiDemoScene() : base()
     {
@@ -33,26 +36,39 @@ public class ImguiDemoScene : ExampleScene
         var increaseFontScaleText = increaseFontScaleAction.GetInputTypeDescription(InputDeviceType.Keyboard, false, 1, false);
         var decreaseFontScaleText = decreaseFontScaleAction.GetInputTypeDescription(InputDeviceType.Keyboard, false, 1, false);
 
-        instructions = $"{decreaseFontScaleText} - {increaseFontScaleText} to adjust ImGui font scale"; 
+        instructions = $"{decreaseFontScaleText} - {increaseFontScaleText} to adjust ImGui font scale";
 
         float radius = 450 / 2;
         var center = new Vector2(0, -6);
         circle = new(center, radius);
     }
 
+    protected override void OnActivate(Scene oldScene)
+    {
+        base.OnActivate(oldScene);
+
+        increaseFontScaleAction.WhenPressed()
+            .Where(_ => currentFontScale < maxFontScale)
+            .Subscribe(_ => currentFontScale += 0.1f)
+            .AddTo(subscriptions);
+
+        decreaseFontScaleAction.WhenPressed()
+            .Where(_ => currentFontScale > minFontScale)
+            .Subscribe(_ => currentFontScale -= 0.1f)
+            .AddTo(subscriptions);
+    }
+
+    protected override void OnDeactivate()
+    {
+        base.OnDeactivate();
+
+        subscriptions.Clear();
+    }
+
     protected override void OnHandleInputExample(float dt, Vector2 mousePosGame, Vector2 mousePosGameUi, Vector2 mousePosUI)
     {
         increaseFontScaleAction.Update(dt, out _);
         decreaseFontScaleAction.Update(dt, out _);
-
-        if (increaseFontScaleAction.State.Pressed && currentFontScale < maxFontScale)
-        {
-            currentFontScale += 0.1f;
-        }
-        else if (decreaseFontScaleAction.State.Pressed && currentFontScale > minFontScale)
-        {
-            currentFontScale -= 0.1f;
-        }
     }
 
     protected override void OnDrawGameExample(ScreenInfo game)
@@ -72,6 +88,5 @@ public class ImguiDemoScene : ExampleScene
         textFont.ColorRgba = Colors.Light;
         var anchorPoint = new AnchorPoint(0.5f, 0f);
         textFont.DrawTextWrapNone(instructions, topCenter, anchorPoint);
-        
     }
 }

@@ -1,5 +1,6 @@
 using System.Text;
 using ImGuiNET;
+using R3;
 using ShapeEngine.Core;
 using ShapeEngine.StaticLib;
 
@@ -12,7 +13,7 @@ namespace ShapeEngine.Input;
 /// <remarks>
 /// Use <see cref="InputActionTree"/> for updating and managing multiple <see cref="InputAction"/> instances.
 /// </remarks>
-public class InputAction : IComparable<InputAction>, ICopyable<InputAction>, IEquatable<InputAction>
+public class InputAction : IComparable<InputAction>, ICopyable<InputAction>, IEquatable<InputAction>, IDisposable
 {
     /// <summary>
     /// Represents the toggle state for an input action.
@@ -158,13 +159,26 @@ public class InputAction : IComparable<InputAction>, ICopyable<InputAction>, IEq
     /// The settings that define the behavior and configuration of this input action.
     /// </summary>
     public readonly InputActionSettings Settings;
-    
+
+    private InputState state;
     /// <summary>
     /// Gets the current input state for this action.
     /// This property is updated each frame,
     /// reflecting the accumulated state from all associated input types.
     /// </summary>
-    public InputState State { get; private set; }
+    public InputState State
+    {
+        get => state;
+        private set
+        {
+            if (!state.Equals(value))
+            {
+                state = value;
+                if (Active)
+                    whenInputStateChanges.OnNext(this);
+            }
+        }
+    }
 
     private readonly List<IInputType> inputs = [];
 
@@ -187,6 +201,16 @@ public class InputAction : IComparable<InputAction>, ICopyable<InputAction>, IEq
     /// Gets the type of the input device that was last used to trigger this action.
     /// </summary>
     public InputDeviceType CurrentDeviceType { get; private set; } = InputDeviceType.None;
+
+    private Subject<InputAction> whenInputStateChanges = new Subject<InputAction>();
+    /// <summary>
+    /// Observable triggered when the input state of the InputAction changes.
+    /// </summary>
+    /// <remarks>
+    /// This observable and the affiliated extension methods are not compatible with the consume approach to preventing double checking.
+    /// This observable only triggers when this InputAction is Active.
+    /// </remarks>
+    public Observable<InputAction> WhenInputStateChanges => whenInputStateChanges;
     #endregion
 
     #region Constructors
@@ -266,6 +290,7 @@ public class InputAction : IComparable<InputAction>, ICopyable<InputAction>, IEq
         Gesture = gesture;
     }
     
+    public void Dispose() => whenInputStateChanges.Dispose();
     #endregion
 
     #region Class

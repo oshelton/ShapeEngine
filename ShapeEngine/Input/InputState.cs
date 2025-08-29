@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using ShapeEngine.StaticLib;
 
 namespace ShapeEngine.Input;
@@ -33,7 +34,7 @@ public readonly struct InputState
     /// The result of the input action gesture, containing details about how the input was triggered (e.g., multi-tap, hold, etc.)
     /// </summary>
     public readonly InputGesture.Result GestureResult;
-    
+
     /// <summary>
     /// The processed axis value, typically smoothed or filtered.
     /// <remarks>
@@ -57,12 +58,12 @@ public readonly struct InputState
     /// The type of input device (keyboard, mouse, gamepad, etc.).
     /// </summary>
     public readonly InputDeviceType InputDeviceType;
-    
+
     /// <summary>
     /// Indicates if this input state has been consumed.
     /// </summary>
     public readonly bool Consumed;
-    
+
     /// <summary>
     /// Initializes a new instance of the <see cref="InputState"/> struct with default values.
     /// </summary>
@@ -113,7 +114,7 @@ public readonly struct InputState
     /// <param name="inputDeviceType">The type of input device (keyboard, mouse, gamepad, etc.).</param>
     /// <param name="gestureResult">The result of the input action gesture.</param>
     /// <param name="inverted">Indicates if the input axis is inverted.</param>
-    public InputState(bool down, bool up, float axisRaw, int gamepad, InputDeviceType inputDeviceType, InputGesture.Result gestureResult,  bool inverted = false)
+    public InputState(bool down, bool up, float axisRaw, int gamepad, InputDeviceType inputDeviceType, InputGesture.Result gestureResult, bool inverted = false)
     {
         Down = down;
         Up = up;
@@ -127,7 +128,7 @@ public readonly struct InputState
         Inverted = inverted;
         GestureResult = gestureResult;
     }
-    
+
     /// <summary>
     /// Creates a new <see cref="InputState"/> by copying all values from an existing state,
     /// but replacing the <see cref="GestureResult"/> with the specified value.
@@ -140,7 +141,7 @@ public readonly struct InputState
         Up = state.Up;
         Released = state.Released;
         Pressed = state.Pressed;
-        
+
         Gamepad = state.Gamepad;
         AxisRaw = state.AxisRaw;
         Axis = state.Axis;
@@ -149,7 +150,7 @@ public readonly struct InputState
         Inverted = state.Inverted;
         GestureResult = gestureResult;
     }
-    
+
     /// <summary>
     /// Initializes a new instance of the <see cref="InputState"/> struct by comparing the previous and current input states.
     /// Calculates <see cref="Pressed"/> and <see cref="Released"/> based on transitions between <paramref name="prev"/> and <paramref name="cur"/>.
@@ -255,10 +256,11 @@ public readonly struct InputState
         }
 
         float axis = AxisRaw;
-        if (MathF.Abs(other.AxisRaw) > MathF.Abs((AxisRaw))) axis = other.AxisRaw;
+        if (MathF.Abs(other.AxisRaw) > MathF.Abs((AxisRaw)))
+            axis = other.AxisRaw;
         bool down = Down || other.Down;
         bool up = Up && other.Up;
-        
+
         return new(down, up, axis, other.Gamepad, inputDevice, new(), inverted);
     }
     /// <summary>
@@ -273,4 +275,23 @@ public readonly struct InputState
     /// </summary>
     /// <returns>A new <see cref="InputState"/> with <see cref="Consumed"/> set to true.</returns>
     public InputState Consume() => new(this, true);
+
+    public bool Equals([NotNullWhen(true)] object? obj)
+    {
+        if (obj is not InputState other)
+            return false;
+
+        // This deliberately ignores consumed from equality checks.
+        return this.Pressed == other.Pressed &&
+            this.Released == other.Released &&
+            this.Down == other.Down &&
+            this.Up == other.Up &&
+            this.Inverted == other.Inverted &&
+            this.GestureResult.Equals(other.GestureResult) &&
+            this.Axis == other.Axis &&
+            this.AxisRaw == other.AxisRaw &&
+            this.Gamepad == other.Gamepad &&
+            this.InputDeviceType == other.InputDeviceType;
+
+    }
 }
