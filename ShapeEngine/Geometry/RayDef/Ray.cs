@@ -1,4 +1,5 @@
 using System.Numerics;
+using ShapeEngine.Core;
 using ShapeEngine.Geometry.LineDef;
 using ShapeEngine.Geometry.RectDef;
 using ShapeEngine.Geometry.SegmentDef;
@@ -10,7 +11,7 @@ namespace ShapeEngine.Geometry.RayDef;
 /// <summary>
 /// Represents a 2D ray with a point of origin, direction, and normal.
 /// </summary>
-public readonly partial struct Ray
+public readonly partial struct Ray : IShapeTypeProvider, IEquatable<Ray>
 {
     /// <summary>
     /// The maximum length used for bounding box and segment calculations.
@@ -268,4 +269,110 @@ public readonly partial struct Ray
         return new Ray(Point, newDir, normalFlipped);
     }
     #endregion
+
+    /// <summary>
+    /// Gets the <see cref="ShapeType"/> identifying this shape as a ray.
+    /// </summary>
+    /// <returns><see cref="ShapeType.Ray"/>.</returns>
+    public ShapeType GetShapeType() => ShapeType.Ray;
+
+    /// <summary>
+    /// Determines whether the current <see cref="Ray"/> is equal to another <see cref="Ray"/>.
+    /// Comparison is performed on the <see cref="Point"/> and <see cref="Direction"/> fields.
+    /// </summary>
+    /// <param name="other">The other <see cref="Ray"/> to compare with the current instance.</param>
+    /// <returns><c>true</c> if both the point and direction are equal; otherwise, <c>false</c>.</returns>
+    public bool Equals(Ray other)
+    {
+        return Equals(other, DecimalPrecision.DefaultDecimalPlaces);
+    }
+
+    /// <summary>
+    /// Determines whether the current <see cref="Ray"/> is equal to another <see cref="Ray"/> using quantized comparison.
+    /// </summary>
+    /// <param name="other">The other <see cref="Ray"/> to compare with the current instance.</param>
+    /// <param name="decimalPlaces">The number of decimal places used to quantize coordinates before comparison.</param>
+    /// <returns><c>true</c> if both the point and direction are equal after quantization; otherwise, <c>false</c>.</returns>
+    public bool Equals(Ray other, int decimalPlaces)
+    {
+        if (decimalPlaces < 0) decimalPlaces = DecimalPrecision.DefaultDecimalPlaces;
+
+        DecimalQuantizer quantizer = new(decimalPlaces);
+        return quantizer.QuantizedEquals(Point, other.Point) &&
+               quantizer.QuantizedEquals(Direction, other.Direction);
+    }
+
+    /// <summary>
+    /// Creates a stable 64-bit hash key for the current ray.
+    /// </summary>
+    /// <param name="decimalPlaces">The number of decimal places used to quantize coordinates before hashing.</param>
+    /// <returns>A 64-bit hash key suitable for cache keys and change detection.</returns>
+    public ulong GetHashKey(int decimalPlaces = DecimalPrecision.DefaultDecimalPlaces)
+    {
+        if (decimalPlaces < 0) decimalPlaces = DecimalPrecision.DefaultDecimalPlaces;
+
+        Fnv1aHashQuantizer hashQuantizer = new(decimalPlaces);
+        return hashQuantizer.GetHash(Point, Direction);
+    }
+
+    /// <summary>
+    /// Creates a fixed-width hexadecimal string representation of the current ray hash key.
+    /// </summary>
+    /// <param name="decimalPlaces">The number of decimal places used to quantize coordinates before hashing.</param>
+    /// <returns>A 16-character uppercase hexadecimal hash key string.</returns>
+    public string GetHashKeyHex(int decimalPlaces = DecimalPrecision.DefaultDecimalPlaces) => GetHashKey(decimalPlaces).ToString("X16");
+
+    /// <summary>
+    /// Creates a string representation of the current ray hash key.
+    /// </summary>
+    /// <param name="decimalPlaces">The number of decimal places used to quantize coordinates before hashing.</param>
+    /// <returns>A stable hexadecimal hash key string.</returns>
+    public string GetHashKeyString(int decimalPlaces = DecimalPrecision.DefaultDecimalPlaces) => GetHashKeyHex(decimalPlaces);
+
+    /// <summary>
+    /// Determines whether the specified object is equal to the current <see cref="Ray"/>.
+    /// Comparison is performed on the <see cref="Point"/> and <see cref="Direction"/> fields.
+    /// </summary>
+    /// <param name="obj">The object to compare with the current <see cref="Ray"/>.</param>
+    /// <returns>
+    /// <c>true</c> if <paramref name="obj"/> is a <see cref="Ray"/> and has the same point and direction; otherwise, <c>false</c>.
+    /// </returns>
+    public override bool Equals(object? obj)
+    {
+        return obj is Ray other && Equals(other);
+    }
+
+    /// <summary>
+    /// Determines whether two rays are equal.
+    /// </summary>
+    /// <param name="left">The first ray to compare.</param>
+    /// <param name="right">The second ray to compare.</param>
+    /// <returns><c>true</c> if the rays are equal; otherwise, <c>false</c>.</returns>
+    public static bool operator ==(Ray left, Ray right)
+    {
+        return left.Equals(right);
+    }
+
+    /// <summary>
+    /// Determines whether two rays are not equal.
+    /// </summary>
+    /// <param name="left">The first ray to compare.</param>
+    /// <param name="right">The second ray to compare.</param>
+    /// <returns><c>true</c> if the rays are not equal; otherwise, <c>false</c>.</returns>
+    public static bool operator !=(Ray left, Ray right)
+    {
+        return !(left == right);
+    }
+
+    /// <summary>
+    /// Returns a hash code for the current <see cref="Ray"/> instance.
+    /// </summary>
+    /// <returns>A 32-bit hash code derived from the stable 64-bit ray hash key.</returns>
+    public override int GetHashCode()
+    {
+        ulong hashKey = GetHashKey();
+        return unchecked((int)(hashKey ^ (hashKey >> 32)));
+    }
+
+
 }

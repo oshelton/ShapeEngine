@@ -1,3 +1,4 @@
+using System.Drawing;
 using ShapeEngine.Core;
 using ShapeEngine.StaticLib;
 using ShapeEngine.Screen;
@@ -8,16 +9,17 @@ using ShapeEngine.Core.GameDef;
 using ShapeEngine.Core.Structs;
 using ShapeEngine.Geometry;
 using ShapeEngine.Geometry.CircleDef;
-using ShapeEngine.Geometry.CollisionSystem;
 using ShapeEngine.Geometry.PolygonDef;
 using ShapeEngine.Geometry.RectDef;
 using ShapeEngine.Geometry.TriangleDef;
 using ShapeEngine.Geometry.TriangulationDef;
 using ShapeEngine.Input;
 using ShapeEngine.Pathfinding;
-using Color = System.Drawing.Color;
 using Path = ShapeEngine.Pathfinding.Path;
 using ShapeEngine.Random;
+using ShapeEngine.ShapeClipper;
+using Size = ShapeEngine.Core.Structs.Size;
+
 namespace Examples.Scenes.ExampleScenes;
 
 public class PathfinderExample2 : ExampleScene
@@ -28,16 +30,19 @@ public class PathfinderExample2 : ExampleScene
         private Vector2 chasePosition;
         private int lastTraversableNodeIndex = -1;
         private Triangle hull;
+        private Triangle prevHull;
         private readonly float shipSize;
         private Vector2 pivot;
         private Vector2 movementDir;
         private float angleRad;
-        private float stopTimer = 0f;
-        private float accelTimer = 0f;
+        private float stopTimer;
+        private float accelTimer;
         private const float AccelTime = 0.25f;
         private const float StopTime = 0.5f;
         public const float Speed = 750;
-    
+
+        private int MaxObstacles = 5;
+        private readonly Queue<Rect> obstacles = [];
         
         private readonly PaletteColor hullColor = Colors.PcCold;
     
@@ -67,16 +72,16 @@ public class PathfinderExample2 : ExampleScene
             inputActionTree = [iaMoveHor, iaMoveVer];
         }
 
-        public Polygon? GetCutShape(float minSize)
-        {
-            var s = MathF.Max(minSize, shipSize);
-            return Polygon.Generate(pivot, 12, s, s * 2);
-        }
+        // public Polygon? GetCutShape(float minSize)
+        // {
+        //     var s = MathF.Max(minSize, shipSize);
+        //     return Polygon.Generate(pivot, 12, s, s * 2);
+        // }
 
-        public bool Overlaps(Polygon poly)
-        {
-            return hull.OverlapShape(poly);
-        }
+        // public bool Overlaps(Polygon poly)
+        // {
+        //     return hull.OverlapShape(poly);
+        // }
         private void CreateHull(Vector2 pos, float size)
         {
             var a = pos + new Vector2(size, 0);
@@ -99,10 +104,12 @@ public class PathfinderExample2 : ExampleScene
         }
         public void Reset(Vector2 pos, float size)
         {
+            obstacles.Clear();
             CreateHull(pos, size);
             chasePosition = hull.A;
             movementDir = new(0, 0);
             angleRad = 0f;
+            
         }
 
         private void Move(float dt, Vector2 dir, float speed)
@@ -122,12 +129,14 @@ public class PathfinderExample2 : ExampleScene
             }
             angleRad += angleMovement;
             hull = hull.ChangeRotation(angleMovement, pivot);
+            
         }
         public void Update(float dt)
         {
+            prevHull = hull;
+            
             inputActionTree.CurrentGamepad = Game.Instance.Input.GamepadManager.LastUsedGamepad;
             inputActionTree.Update(dt);
-            
             
             if (Game.Instance.Input.CurrentInputDeviceType == InputDeviceType.Mouse)
             {
@@ -188,9 +197,6 @@ public class PathfinderExample2 : ExampleScene
                 }
             }
             
-            
-            
-
             var nodeIndex = pathfinder.GetIndex(hull.A);
             if (lastTraversableNodeIndex != nodeIndex && pathfinder.IsTraversable(nodeIndex))
             {
@@ -198,17 +204,51 @@ public class PathfinderExample2 : ExampleScene
                 var r = pathfinder.GetRect(nodeIndex);
                 chasePosition = r.Center;
             }
+
+            if (ShapeKeyboardButton.Q.GetInputState().Pressed)
+            {
+                if(obstacles.Count >= MaxObstacles)
+                {
+                    var oldObstacle = obstacles.Dequeue();
+                    var nodeValueReset = new NodeCost(NodeCostType.Reset);
+                    pathfinder.ApplyNodeValue(oldObstacle, nodeValueReset);
+                }
+                var obstacleRect = new Rect(chasePosition, new Size(shipSize, shipSize) * 12f, AnchorPoint.Center);
+                var nodeValue = new NodeCost(NodeCostType.Block);
+                pathfinder.ApplyNodeValue(obstacleRect, nodeValue);
+                obstacles.Enqueue(obstacleRect);
+            }
         }
-        public void Draw()
+        public void Draw(ScreenInfo game)
         {
-            // var rightThruster = movementDir.RotateDeg(-25);
-            // var leftThruster = movementDir.RotateDeg(25);
-            // ShapeDrawing.DrawCircle(Hull.Center - rightThruster * Hull.Radius, Hull.Radius / 6, outlineColor.ColorRgba, 12);
-            // ShapeDrawing.DrawCircle(Hull.Center - leftThruster * Hull.Radius, Hull.Radius / 6, outlineColor.ColorRgba, 12);
-            // Hull.Draw(hullColor.ColorRgba);
-            // ShapeDrawing.DrawCircle(Hull.Center + movementDir * Hull.Radius * 0.66f, Hull.Radius * 0.33f, cockpitColor.ColorRgba, 12);
-            //
-            hull.DrawLines(4f, hullColor.ColorRgba);
+            foreach (var obstacleRect in obstacles)
+            {
+                obstacleRect.Draw(new ColorRgba(Color.DarkRed));
+                obstacleRect.DrawLines(8f, new ColorRgba(Color.Crimson));
+            }
+            
+            DrawInterpolated(game.FixedFramerateInterpolationFactorF);
+        }
+
+        //example of how to use the interpolation factor to draw smooth movement when using fixed framerate
+        private void DrawInterpolated(float f)
+        {
+            if (f >= 1.0f)
+            {
+                hull.DrawLines(4f, hullColor.ColorRgba);
+            }
+            else if (f <= 0.0f)
+            {
+                prevHull.DrawLines(4f, hullColor.ColorRgba);
+            }
+            else
+            {
+                var a = prevHull.A.Lerp(hull.A, f);
+                var b = prevHull.B.Lerp(hull.B, f);
+                var c = prevHull.C.Lerp(hull.C, f);
+                var interpHull = new Triangle(a, b, c);
+                interpHull.DrawLines(4f, hullColor.ColorRgba); 
+            }
         }
         
         public void FollowStarted()
@@ -238,14 +278,8 @@ public class PathfinderExample2 : ExampleScene
 
     private class Chaser : IPathfinderAgent
     {
-        
-        // public static int RequestCount = 0;
-        // private static readonly int MaxRequestsPerFrame = 150;
-        // private static bool RequestSlotAvailable => RequestCount < MaxRequestsPerFrame;
-        // private static void RequestSlotUsed() => RequestCount++;
-        // public static void ClearRequestCount() => RequestCount = 0;
-        
         private Circle body;
+        private Circle prevBody;
         private float speed;
         private bool Predictor => predictionSeconds > 0f;
         private float predictionSeconds;
@@ -254,19 +288,11 @@ public class PathfinderExample2 : ExampleScene
         private Pathfinder pathfinder;
         private Path? currentPath = null;
         private int currentPathIndex = -1;
-        private Vector2 nextPathPoint = new();
-        // private float endMovementTimer = 0f;
-        // private const float EndMovementTime = 5f;
+        private Vector2 nextPathPoint;
         
         private float pathTimer = 0f;
         private const float pathTimerInterval = 1f;
-        private Vector2 lastTargetPosition = new();
-
-        
-        
-        // public const float MaxPathRequestDistance = 5000f;
-        // private const float MaxPathRequestDistanceSquared = MaxPathRequestDistance * MaxPathRequestDistance;
-        // private bool directChase = false;
+        private Vector2 lastTargetPosition;
 
         public Chaser(Vector2 pos, float size, float speed, Pathfinder pathfinder)
         {
@@ -274,7 +300,9 @@ public class PathfinderExample2 : ExampleScene
             this.body = new(pos, s);
             this.pathfinder = pathfinder;
             if (Rng.Instance.Chance(0.25f))
+            {
                 predictionSeconds = Rng.Instance.RandF(PredictorSeconds * 0.75f, PredictorSeconds * 1f);
+            }
 
 
             this.speed = speed * (Predictor ? Rng.Instance.RandF(0.4f, 0.5f) : Rng.Instance.RandF(0.25f, 0.35f));
@@ -284,7 +312,7 @@ public class PathfinderExample2 : ExampleScene
         public void Reset(Vector2 pos)
         {
             body = new Circle(pos, body.Radius);
-            currentPath = null;
+            ClearCurrentPath();
             ClearPathTimer();
             lastTargetPosition = new();
             currentPathIndex = -1;
@@ -299,22 +327,6 @@ public class PathfinderExample2 : ExampleScene
                 return;
             }
             pathTimer = Rng.Instance.RandF(pathTimerInterval * 0.5f, pathTimerInterval * 1.5f);
-            // var disSq = (GetTargetPosition() - body.Center).LengthSquared();
-            // if (disSq < MaxPathRequestDistanceSquared)
-            // {
-            //     pathTimer = ShapeRandom.RandF(pathTimerInterval * 0.5f, pathTimerInterval * 1.5f);
-            // }
-            // else
-            // {
-            //     pathTimer = ShapeRandom.RandF(pathTimerInterval * 1.5f, pathTimerInterval * 3f);
-            // }
-            
-            
-            // var disSq = (target.GetChasePosition() - body.Center).LengthSquared();
-            // var baseDisSq = 5000f * 5000f;
-            // float f = ShapeMath.Clamp(disSq / baseDisSq, 0.2f, 1f);
-            //
-            // pathTimer = ShapeRandom.RandF(pathTimerInterval * 0.5f, pathTimerInterval * 2f) * f;
         }
 
         private void ClearPathTimer() => pathTimer = 0f;
@@ -325,40 +337,17 @@ public class PathfinderExample2 : ExampleScene
         }
         public void Update(float dt)
         {
+            prevBody = body;
             if (pathTimer > 0) pathTimer -= dt;
 
             if (target == null) return;
 
             var chasePos = GetTargetPosition();
             var targetDisSq = (chasePos - body.Center).LengthSquared();
-            // if (targetDisSq > MaxPathRequestDistanceSquared)
-            // {
-            //     if (endMovementTimer <= EndMovementTime)
-            //     {
-            //         endMovementTimer += dt;
-            //         float f = 1f - ( endMovementTimer / EndMovementTime );
-            //         var newPos = body.Center.MoveTowards(chasePos, speed * dt * f);
-            //         body = new Circle(newPos, body.Radius);
-            //     }
-            //     
-            //     return;
-            // }
-            //
-            // endMovementTimer = 0f;
-            //
-            // if (targetDisSq < MinPathRequestDistance)
-            // {
-            //     float f = 0.8f;
-            //     var newPos = body.Center.MoveTowards(chasePos, speed * dt * f);
-            //     body = new Circle(newPos, body.Radius);
-            //     return;
-            // }
             
-            
-            
-            if (targetDisSq < MinPathRequestDistanceSquared)// || targetDisSq > MaxPathRequestDistanceSquared)
+            if (targetDisSq < MinPathRequestDistanceSquared)
             {
-                float f = 0.8f; // targetDisSq > MaxPathRequestDistanceSquared ? 0.25f : 0.8f;
+                var f = 0.8f;
                 var newPos = body.Center.MoveTowards(chasePos, speed * dt * f);
                 body = new Circle(newPos, body.Radius);
                 return;
@@ -371,12 +360,10 @@ public class PathfinderExample2 : ExampleScene
                 {
                     GetNewPath();
                     SetPathTimer();
-                    // if (currentPath == null) directChase = true;
 
                 }
                 else
                 {
-                    // var chasePos = target.GetChasePosition();
                     if ((chasePos - lastTargetPosition).LengthSquared() > 250 * 250)
                     {
                         GetNewPath();
@@ -385,10 +372,6 @@ public class PathfinderExample2 : ExampleScene
                     SetPathTimer();
                 }
             }
-            // if (target != null && currentPath == null)
-            // {
-            //     GetNewPath();
-            // }
 
             if (currentPath != null)
             {
@@ -396,56 +379,47 @@ public class PathfinderExample2 : ExampleScene
                 if (disSq < 10 * 10)
                 {
                     if (!SetNextPathPoint()) currentPathIndex++;
-                    else currentPath = null; //finished
+                    else ClearCurrentPath(); //finished
                 }
             }
 
             if (currentPath != null)
             {
-                // float speedFactor = 1f;
-                // if (target != null)
-                // {
-                //     float targetDisSq = (target.GetChasePosition() - body.Center).LengthSquared();
-                //     float maxDisSq = 5000f * 5000f;
-                //     float thresholdSq = 1000f * 1000f;
-                //     
-                //     var factor = ShapeMath.Clamp(targetDisSq - thresholdSq / maxDisSq - thresholdSq, 0f, 0.8f);
-                //     speedFactor = 1f - factor;
-                // }
-                
-                
+               
                 var newPos = body.Center.MoveTowards(nextPathPoint, speed * dt);
                 body = new Circle(newPos, body.Radius);
             }
             
         }
 
-        public void Draw(Rect cameraRect)
+        public void Draw(ScreenInfo game)
         {
+            var cameraRect = game.Area;
             if (!body.GetBoundingBox().OverlapShape(cameraRect)) return;
-            // body. DrawLines(body.Radius * 0.25f, Colors.Special);
+            
+            DrawInterpolated(game.FixedFramerateInterpolationFactorF);
+        }
+
+        private void DrawInterpolated(float factor)
+        {
             var c = Predictor ? Colors.PcHighlight : Colors.PcSpecial;
-            CircleDrawing.DrawCircleFast(body.Center, body.Radius, c.ColorRgba);
-
-
-            // if (Predictor)
-            // {
-            //     GetTargetPosition().Draw(36f, new ColorRgba(Color.Lime));
-            // }
-            // if (currentPath != null)
-            // {
-            //     currentPath.Start.Draw(8f, new ColorRgba(Color.LawnGreen));
-            //     currentPath.End.Draw(8f, new ColorRgba(Color.OrangeRed));
-            //     if (currentPath.Rects.Count > 0)
-            //     {
-            //         foreach (var r in currentPath.Rects)
-            //         {
-            //             // r.ScaleSize(0.25f, new Vector2(0.5f)).Draw(new ColorRgba(Color.DodgerBlue));
-            //             r.DrawLines(4f, new ColorRgba(Color.DodgerBlue));
-            //         }
-            //     }
-            //     nextPathPoint.Draw(12f, new ColorRgba(Color.Yellow));
-            // }
+            if (factor <= 0f)
+            {
+                var circle = new Circle(body.Center, prevBody.Radius);
+                circle.DrawFast(c.ColorRgba);
+            }
+            else if (factor >= 1f)
+            {
+                var circle = new Circle(body.Center, body.Radius);
+                circle.DrawFast(c.ColorRgba);
+            }
+            else
+            {
+                var interpPos = prevBody.Center.Lerp(body.Center, factor);
+                float interpRadius = ShapeMath.LerpFloat(prevBody.Radius, body.Radius, factor);
+                var circle = new Circle(interpPos, interpRadius);
+                circle.DrawFast(c.ColorRgba);
+            }
         }
 
         private Vector2 GetTargetPosition()
@@ -467,10 +441,8 @@ public class PathfinderExample2 : ExampleScene
         private void GetNewPath()
         {
             if (target == null) return;
-            // if (!RequestSlotAvailable) return;
-            // RequestSlotUsed();
 
-            var chasePos = GetTargetPosition(); // target.GetChasePosition();
+            var chasePos = GetTargetPosition();
             
             PathRequest request = 
                 new(
@@ -481,20 +453,6 @@ public class PathfinderExample2 : ExampleScene
                 );
             OnRequestPath?.Invoke(request);
             
-            // currentPath = pathfinder.GetPath(body.Center, chasePos, 0);
-            // if (currentPath != null)
-            // {
-            //     if (currentPath.Rects.Count > 0)
-            //     {
-            //         lastTargetPosition = chasePos;
-            //         nextPathPoint = currentPath.Rects[0].GetClosestPoint(chasePos).Closest.Point;
-            //         currentPathIndex = 1;
-            //         return;
-            //     }
-            //
-            //     currentPath = null;
-            //
-            // }
         }
 
         private bool SetNextPathPoint()
@@ -507,7 +465,7 @@ public class PathfinderExample2 : ExampleScene
             var index = pathfinder.GetIndex(nextPos);
             if (!pathfinder.IsTraversable(index))
             {
-                currentPath = null;
+                ClearCurrentPath();
                 return true;
             }
             nextPathPoint = nextPos;
@@ -517,6 +475,7 @@ public class PathfinderExample2 : ExampleScene
         public event Action<PathRequest>? OnRequestPath;
         public void ReceiveRequestedPath(Path? path, PathRequest request)
         {
+            ClearCurrentPath();
             currentPath = path;
             
             if (path != null)
@@ -524,12 +483,12 @@ public class PathfinderExample2 : ExampleScene
                 if (path.Rects.Count > 0)
                 {
                     lastTargetPosition = request.End;
-                    nextPathPoint = path.Rects[0].GetClosestPoint(request.End, out float disSquared).Point; // path.Rects[0].GetClosestPoint(request.End).Closest.Point;
+                    nextPathPoint = path.Rects[0].GetClosestPoint(request.End, out float disSquared).Point;
                     currentPathIndex = 1;
                     return;
                 }
         
-                currentPath = null;
+                ClearCurrentPath();
             }
         }
         
@@ -544,12 +503,19 @@ public class PathfinderExample2 : ExampleScene
         {
             
         }
+
+        private void ClearCurrentPath()
+        {
+            if (currentPath == null) return;
+            Path.ReturnPath(currentPath);
+            currentPath = null;
+        }
     }
 
     private class AsteroidObstacle
     {
-        public static readonly NodeValue NodeValue = new(NodeValueType.Block);
-        public static readonly NodeValue NodeValueReset = new(NodeValueType.Reset);
+        public static readonly NodeCost NodeCost = new(NodeCostType.Block);
+        public static readonly NodeCost NodeCostReset = new(NodeCostType.Reset);
         private Polygon shape;
         private Triangulation triangulation;
         private Rect bb;
@@ -559,9 +525,11 @@ public class PathfinderExample2 : ExampleScene
         public AsteroidObstacle(Vector2 center)
         {
             this.center = center;
-            this.shape = GenerateShape(center);
-            this.bb = this.shape.GetBoundingBox();
-            this.triangulation = shape.Triangulate();
+            shape = new();
+            GenerateShape(center, shape);
+            bb = this.shape.GetBoundingBox();
+            triangulation = new();
+            shape.Triangulate(triangulation);
 
         }
 
@@ -570,7 +538,8 @@ public class PathfinderExample2 : ExampleScene
             this.shape = shape;
             this.center = shape.GetCentroid();
             this.bb = this.shape.GetBoundingBox();
-            this.triangulation = shape.Triangulate();
+            this.triangulation = new();
+            this.shape.Triangulate(triangulation);
         }
 
         
@@ -578,18 +547,21 @@ public class PathfinderExample2 : ExampleScene
         {
             if (!bb.OverlapShape(cameraRect)) return;
 
-            if(drawFilled) triangulation.Draw(Colors.PcBackground.ColorRgba);
+            if (drawFilled) triangulation.Draw(Colors.PcBackground.ColorRgba);
             
             if (AsteroidLineThickness > 1)
             {
-                shape.DrawLines(AsteroidLineThickness, Colors.PcHighlight.ColorRgba);
+                TriMesh result = new();
+                shape.TriangulateOutline(result, AsteroidLineThickness, 4f, true, false);
+                result.Draw(Colors.PcHighlight.ColorRgba);
+                // shape.DrawLines(AsteroidLineThickness, Colors.PcHighlight.ColorRgba);
             }
         }
 
         
-        public static Polygon? GenerateShape(Vector2 position)
+        public static bool GenerateShape(Vector2 position, Polygon shape)
         {
-            return Polygon.Generate(position, AsteroidPointCount, AsteroidMinSize, AsteroidMaxSize);
+            return Polygon.Generate(position, AsteroidPointCount, AsteroidMinSize, AsteroidMaxSize, shape);
         }
         
         public ShapeType GetShapeType() => ShapeType.Poly;
@@ -599,7 +571,6 @@ public class PathfinderExample2 : ExampleScene
         public float GetValue() => 0;
     }
     
-    // private const int chaserCount = 100;
     private Rect universe;
     private Polygon universeShape;
     private Pathfinder pathfinder;
@@ -628,7 +599,8 @@ public class PathfinderExample2 : ExampleScene
     private const float MinPathRequestDistance = CellSize * 2;
     private const float MinPathRequestDistanceSquared = MinPathRequestDistance * MinPathRequestDistance;
 
-    
+    Polygons cutOutsBuffer = new();
+    Polygons newShapesBuffer = new();
     
     
     public PathfinderExample2()
@@ -641,7 +613,7 @@ public class PathfinderExample2 : ExampleScene
         universeShape = universe.ToPolygon();
         var cols = (int)(universeWidth / CellSize);
         var rows = (int)(universeHeight / CellSize);
-        pathfinder = new(universe, cols, rows);
+        pathfinder = new(universe, cols, rows, 240, true);
         
         camera = new();
         follower = new(0, 300, 500);
@@ -665,11 +637,6 @@ public class PathfinderExample2 : ExampleScene
         
         AddAsteroids(AsteroidCount);
         AddChasers(250);
-
-        pathfinder.RequestsPerFrame = 30;
-
-
-        
     }
 
     protected override void OnActivate(Scene oldScene)
@@ -753,9 +720,11 @@ public class PathfinderExample2 : ExampleScene
         for (int i = 0; i < amount; i++)
         {
             var center = universe.GetRandomPointInside();
-            var newShape = AsteroidObstacle.GenerateShape(center);
+            Polygon newShape = new();
+            if(!AsteroidObstacle.GenerateShape(center, newShape) || newShape.Count < 3) continue;
 
-            var result = newShape.Intersect(universeShape);
+            Polygons result = new();
+            newShape.ClipIntersection(universeShape, result);
             if (result.Count > 0)
             {
                 newShape = result[0].ToPolygon();
@@ -765,11 +734,11 @@ public class PathfinderExample2 : ExampleScene
             {
                 var existingShape = shapes[j];
                 
-                if(newShape == existingShape) continue;
+                if(newShape.Equals(existingShape)) continue;
 
                 if (newShape.OverlapShape(existingShape))
                 {
-                    newShape.UnionShapeSelf(existingShape, FillRule.NonZero);
+                    newShape.ClipUnion(existingShape, newShape);
                     shapes.RemoveAt(j);
                 }
                 else
@@ -777,11 +746,12 @@ public class PathfinderExample2 : ExampleScene
                     var cd = newShape.GetClosestPoint(existingShape);
                     if (cd.DistanceSquared <= cellDisSq)
                     {
-                        var fillShape = Polygon.Generate(cd.Self.Point, 7, cellDistance, cellDistance * 2);
-                        if (fillShape != null)
+                        Polygon fillShape = new();
+                        Polygon.Generate(cd.Self.Point, 7, cellDistance, cellDistance * 2, fillShape);
+                        if (fillShape.Count > 3)
                         {
-                            newShape.UnionShapeSelf(fillShape, FillRule.NonZero);
-                            newShape.UnionShapeSelf(existingShape, FillRule.NonZero);
+                            newShape.ClipUnion(fillShape, newShape);
+                            newShape.ClipUnion(existingShape, newShape);
                             shapes.RemoveAt(j);  
                         }
                         
@@ -797,15 +767,16 @@ public class PathfinderExample2 : ExampleScene
         {
             var asteroid = new AsteroidObstacle(shape);
             asteroids.Add(asteroid);
-            pathfinder.ApplyNodeValue(shape, AsteroidObstacle.NodeValue);
+            pathfinder.ApplyNodeValue(shape, AsteroidObstacle.NodeCost);
         }
     }
 
+    /*
     private void AddAsteroid(Vector2 position)
     {
         var asteroidShape = AsteroidObstacle.GenerateShape(position);
         
-        pathfinder.ApplyNodeValue(asteroidShape, AsteroidObstacle.NodeValue);
+        pathfinder.ApplyNodeValue(asteroidShape, AsteroidObstacle.NodeCost);
         
         
         var cellDistance = pathfinder.CellSize.Min() * 4;
@@ -825,7 +796,7 @@ public class PathfinderExample2 : ExampleScene
                     {
                         if (pathD.IsHole())
                         {
-                            pathfinder.ApplyNodeValue(pathD.ToPolygon(), AsteroidObstacle.NodeValue);
+                            pathfinder.ApplyNodeValue(pathD.ToPolygon(), AsteroidObstacle.NodeCost);
                         }
                         else
                         {
@@ -856,7 +827,7 @@ public class PathfinderExample2 : ExampleScene
                             {
                                 if (pathD.IsHole())
                                 {
-                                    pathfinder.ApplyNodeValue(pathD.ToPolygon(), AsteroidObstacle.NodeValue);
+                                    pathfinder.ApplyNodeValue(pathD.ToPolygon(), AsteroidObstacle.NodeCost);
                                 }
                                 else
                                 {
@@ -868,7 +839,7 @@ public class PathfinderExample2 : ExampleScene
                                 }
                             }
                         }
-                        pathfinder.ApplyNodeValue(fillShape, AsteroidObstacle.NodeValue);
+                        pathfinder.ApplyNodeValue(fillShape, AsteroidObstacle.NodeCost);
                     
                         unionResult = Clipper.Union(asteroidShape.ToClipperPaths(), otherShape.ToClipperPaths(), FillRule.NonZero);
                         if (unionResult.Count > 0)
@@ -877,7 +848,7 @@ public class PathfinderExample2 : ExampleScene
                             {
                                 if (pathD.IsHole())
                                 {
-                                    pathfinder.ApplyNodeValue(pathD.ToPolygon(), AsteroidObstacle.NodeValue);
+                                    pathfinder.ApplyNodeValue(pathD.ToPolygon(), AsteroidObstacle.NodeCost);
                                 }
                                 else
                                 {
@@ -908,8 +879,9 @@ public class PathfinderExample2 : ExampleScene
         var newAsteroid = new AsteroidObstacle(asteroidShape);
         asteroids.Add(newAsteroid);
     }
+    */
 
-    private void RemoveChasers(int amount)
+    /*private void RemoveChasers(int amount)
     {
         if (amount >= chasers.Count)
         {
@@ -924,7 +896,8 @@ public class PathfinderExample2 : ExampleScene
             chasers.RemoveAt(i);
             pathfinder.RemoveAgent(chaser);
         }
-    }
+    }*/
+    
     protected override void OnHandleInputExample(float dt, Vector2 mousePosGame, Vector2 mousePosGameUi, Vector2 mousePosUI)
     {
         var gamepad = Input.GamepadManager.LastUsedGamepad;
@@ -985,57 +958,29 @@ public class PathfinderExample2 : ExampleScene
                 var asteroid = asteroids[i];
                
                 var asteroidShape = asteroid.GetShape();
-                var result = asteroidShape.CutShape(cutShape);
+                cutOutsBuffer.Clear();
+                newShapesBuffer.Clear();
+                asteroidShape.Cut(cutShape, cutOutsBuffer, newShapesBuffer);
                 
-                if (result.cutOuts.Count > 0 )
+                if (cutOutsBuffer.Count > 0)
                 {
                     lastCutShapes.Add(cutRect);
                     lastCutShapeTimers.Add(LastCutShapeDuration);
-                    pathfinder.ApplyNodeValue(nodeValueRect, AsteroidObstacle.NodeValueReset);
+                    pathfinder.ApplyNodeValue(nodeValueRect, AsteroidObstacle.NodeCostReset);
                     asteroids.RemoveAt(i);
                 
-                    foreach (var shape in result.newShapes)
+                    foreach (var shape in newShapesBuffer)
                     {
                         if (shape.GetArea() <= CellSize * CellSize)
                         {
-                            pathfinder.ApplyNodeValue(shape, AsteroidObstacle.NodeValueReset);
+                            pathfinder.ApplyNodeValue(shape, AsteroidObstacle.NodeCostReset);
                             continue;
                         }
                         var newAsteroid = new AsteroidObstacle(shape);
                         asteroids.Add(newAsteroid);
                     }
                 }
-                
-                // if (ship.Overlaps(asteroid.GetShape()))
-                // {
-                //     var asteroidShape = asteroid.GetShape();
-                //     var result = asteroidShape.Cut(cutShape);
-                //
-                //     if (result.newShapes.Count > 0)
-                //     {
-                //         lastCutShapes.Add(cutRect);
-                //         lastCutShapeTimers.Add(LastCutShapeDuration);
-                //         pathfinder.ApplyNodeValue(nodeValueRect, AsteroidObstacle.NodeValueReset);
-                //         asteroids.RemoveAt(i);
-                //
-                //         foreach (var shape in result.newShapes)
-                //         {
-                //             if (shape.GetArea() <= CellSize * CellSize)
-                //             {
-                //                 pathfinder.ApplyNodeValue(shape, AsteroidObstacle.NodeValueReset);
-                //                 continue;
-                //             }
-                //             var newAsteroid = new AsteroidObstacle(shape);
-                //             asteroids.Add(newAsteroid);
-                //         }
-                //     }
-                //
-                // }
-                //
-                
-                // asteroid.Update(time.Delta);
             }
-
         }
         
         
@@ -1087,9 +1032,9 @@ public class PathfinderExample2 : ExampleScene
                 var outerColor = Colors.PcSpecial.ColorRgba.ChangeAlpha((byte)150);
                 outerBoundary.DrawLines(thickness, outerColor);
             }
-            
-            CircleDrawing.DrawCircleLines(ship.GetChasePosition(), MinPathRequestDistance, 8f, Colors.PcCold.ColorRgba);
-            // ShapeDrawing.DrawCircleLines(ship.GetChasePosition(), Chaser.MaxPathRequestDistance, 8f, new ColorRgba(Color.Aqua));
+
+            var circle = new Circle(ship.GetChasePosition(), MinPathRequestDistance);
+            circle.DrawLines(8f, Colors.PcCold.ColorRgba, 0.8f);
         }
 
         
@@ -1100,12 +1045,12 @@ public class PathfinderExample2 : ExampleScene
         }
         foreach (var chaser in chasers)
         {
-            chaser.Draw(game.Area);
+            chaser.Draw(game);
         }
         
         
         
-        ship.Draw();
+        ship.Draw(game);
 
         var cutShapeColor = Colors.PcWarm.ColorRgba.SetAlpha(100);//.ChangeBrightness(-0.75f);
         foreach (var cutShape in lastCutShapes)

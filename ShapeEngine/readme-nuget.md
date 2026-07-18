@@ -7,7 +7,10 @@ When using Shape Engine everything from Raylib is available as well. ([Raylib Ex
 
 > You are free to use Shape Engine or any part of Shape Engine for your own projects, but keep in mind that Shape Engine was designed to help me with my specific game dev needs. Nevertheless I am looking forward to creations that Shape Engine made possible :)
 
-### *[Release Trailer](https://youtu.be/fmx9zICSe3Q)*
+[Release Trailer 5.0](https://youtu.be/fh-uaLW-GTc)
+[Release Trailer 3.0](https://youtu.be/Ag8rDXmvHwk)
+[Release Trailer 2.0](https://youtu.be/Jbae8znfTTs)
+[Release Trailer 1.0](https://youtu.be/fmx9zICSe3Q)
 
 ## Fork Details (Owen Shelton)
 
@@ -67,35 +70,43 @@ using ShapeEngine.Geometry;
 using ShapeEngine.Geometry.RectDef;
 
 namespace ShapeEngineProject;   
+public static class Program
+{
+    public static void Main(string[] args)
+    {
+	    var game = new MyGameClass
+		(
+			GameSettings.StretchMode("Shape Engine Game"),
+			WindowSettings.Default,
+			FramerateSettings.Default,
+			InputSettings.Default
+		);
+	    game.Run();
+    }
+}
 
-public static class Program 
-{     
-    public static void Main(string[] args)     
-    {         
-        var game = new MyGameClass(GameSettings.StretchMode, WindowSettings.Default, InputSettings.Default);
-		game.Run();    
-    } 
-} 
-
-public class MyGameClass : Game 
-{     
+public class MyGameClass : Game
+{
     //Gives you static access to the instance of MyGameClass - If you do not need/want this, you can remove it.
     public new static MyGameClass Instance  => myInstance?? throw new NullReferenceException("Instance is not initialized! You need to create a MyGameClass instance before accessing this property!");
     private static MyGameClass? myInstance;
     
-    public MyGameClass(GameSettings gameSettings, WindowSettings windowSettings, InputSettings inputSettings) : base(gameSettings, windowSettings, inputSettings) 
+    public MyGameClass(
+		GameSettings gameSettings, WindowSettings windowSettings,
+		FramerateSettings framerateSettings, InputSettings inputSettings)
+		: base(gameSettings, windowSettings, framerateSettings, inputSettings)
     {
         //Game.Instance is already checked to never be instantiated twice, so this is safe
         myInstance = GetInstanceAs<MyGameClass>();
     }
     
-    protected override void DrawGame(ScreenInfo game)     
-    {         
-        game.Area.Draw(new ColorRgba(Color.DarkOliveGreen));         
-        game.Area.DrawLines(12f, new ColorRgba(Color.AntiqueWhite));         
-        game.MousePos.Draw(24f, new ColorRgba(Color.Lime), 36);     
-    } 
-} 
+    protected override void DrawGame(ScreenInfo game)
+    {
+        game.Area.Draw(new ColorRgba(Color.DarkOliveGreen));
+        game.Area.DrawLines(12f, new ColorRgba(Color.AntiqueWhite));
+        game.MousePos.Draw(24f, new ColorRgba(Color.Lime), 36);
+    }
+}
 ```
 
 
@@ -113,6 +124,7 @@ public class MyGameClass : Game
 > In general my goal is to provide the most relevant system a game dev needs without adding a solution for every possible problem.
 
 - [Polygon Fracturing](https://youtu.be/RaKz4q_zYrg)
+- Polygon Clipping & Boolean Operations
 - [Delaunay Triangulation](https://youtu.be/eJqZB-e6m54)
 - [Text & Font System](https://youtu.be/D3xLx7f1YqQ)
 - [Word Emphasis System](https://youtu.be/wEz60lx8ef4)

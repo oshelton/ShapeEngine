@@ -3,6 +3,7 @@ using ShapeEngine.Geometry.RectDef;
 
 namespace ShapeEngine.Core.Structs;
 
+
 /// <summary>
 /// Represents a 2D grid structure with customizable orientation, placement, and cell access utilities.
 /// </summary>
@@ -11,327 +12,31 @@ namespace ShapeEngine.Core.Structs;
 /// </remarks>
 public readonly struct Grid : IEquatable<Grid>
 {
-    /// <summary>
-    /// Represents a coordinate (row, column) within a <see cref="Grid"/>.
-    /// </summary>
-    /// <remarks>
-    /// Provides arithmetic and comparison operators, as well as conversion to <see cref="Vector2"/>.
-    /// </remarks>
-    public readonly struct Coordinates : IEquatable<Coordinates>
-    {
-        /// <summary>
-        /// The row index of the coordinate.
-        /// </summary>
-        public readonly int Row;
-        /// <summary>
-        /// The column index of the coordinate.
-        /// </summary>
-        public readonly int Col;
-        /// <summary>
-        /// Gets whether the coordinate is valid (both row and column are non-negative).
-        /// </summary>
-        public bool IsValid => Row >= 0 && Col >= 0;
-
-        /// <summary>
-        /// Gets the product of the absolute values of row and column.
-        /// </summary>
-        public int Count
-        {
-            get
-            {
-                int r = Row < 0 ? Row * -1 : Row;
-                int c = Col < 0 ? Col * -1 : Col;
-                
-                return r * c;
-            }
-        }
-        /// <summary>
-        /// Gets the sum of the absolute values of row and column.
-        /// </summary>
-        public int Distance
-        {
-            get
-            {
-                int r = Row < 0 ? Row * -1 : Row;
-                int c = Col < 0 ? Col * -1 : Col;
-                
-                return r + c;
-            }
-        }
-
-        /// <summary>
-        /// Initializes a coordinate with invalid values (-1, -1).
-        /// </summary>
-        public Coordinates()
-        {
-            this.Row = -1;
-            this.Col = -1;
-        }
-        /// <summary>
-        /// Initializes a coordinate with the specified column and row.
-        /// </summary>
-        /// <param name="col">The column index.</param>
-        /// <param name="row">The row index.</param>
-        public Coordinates(int col, int row)
-        {
-            this.Row = row;
-            this.Col = col;
-        }
-
-        /// <summary>
-        /// Converts this coordinate to a <see cref="Vector2"/>.
-        /// </summary>
-        /// <returns>A <see cref="Vector2"/> with (Col, Row).</returns>
-        public Vector2 ToVector2() => new Vector2(Col, Row);
-
-        #region Operators
-        /// <summary>
-        /// Determines whether this coordinate is equal to another coordinate.
-        /// </summary>
-        /// <param name="other">The coordinate to compare with.</param>
-        /// <returns>True if the coordinates are equal; otherwise, false.</returns>
-        public bool Equals(Coordinates other) => Row == other.Row && Col == other.Col;
-
-        /// <summary>
-        /// Determines whether this coordinate is equal to another object.
-        /// </summary>
-        /// <param name="obj">The object to compare with.</param>
-        /// <returns>True if the object is a <see cref="Coordinates"/> and is equal; otherwise, false.</returns>
-        public override bool Equals(object? obj) => obj is Coordinates other && Equals(other);
-
-        /// <summary>
-        /// Returns a hash code for this coordinate.
-        /// </summary>
-        /// <returns>A hash code for the current coordinate.</returns>
-        public override int GetHashCode() => HashCode.Combine(Row, Col);
-        
-        /// <summary>
-        /// Determines whether two coordinates are equal.
-        /// </summary>
-        /// <param name="left">The first coordinate to compare.</param>
-        /// <param name="right">The second coordinate to compare.</param>
-        /// <returns>True if the coordinates are equal; otherwise, false.</returns>
-        public static bool operator ==(Coordinates left, Coordinates right) => left.Equals(right);
-
-        /// <summary>
-        /// Determines whether two coordinates are not equal.
-        /// </summary>
-        /// <param name="left">The first coordinate to compare.</param>
-        /// <param name="right">The second coordinate to compare.</param>
-        /// <returns>True if the coordinates are not equal; otherwise, false.</returns>
-        public static bool operator !=(Coordinates left, Coordinates right) => !left.Equals(right);
-        
-        /// <summary>
-        /// Returns a string representation of the coordinate.
-        /// </summary>
-        /// <returns>A string describing the coordinate's column and row.</returns>
-        public override string ToString()
-        {
-            return $"({Col},{Row})";
-        }
-
-        /// <summary>
-        /// Adds two coordinates together.
-        /// </summary>
-        /// <param name="left">The first coordinate.</param>
-        /// <param name="right">The second coordinate.</param>
-        /// <returns>The sum of the two coordinates.</returns>
-        public static Coordinates operator +(Coordinates left, Coordinates right)
-        {
-            return 
-                new
-                (
-                    left.Col + right.Col,
-                    left.Row + right.Row
-                );
-        }
-        /// <summary>
-        /// Subtracts one coordinate from another.
-        /// </summary>
-        /// <param name="left">The coordinate to subtract from.</param>
-        /// <param name="right">The coordinate to subtract.</param>
-        /// <returns>The difference of the two coordinates.</returns>
-        public static Coordinates operator -(Coordinates left, Coordinates right)
-        {
-            return 
-                new
-                (
-                    left.Col - right.Col,
-                    left.Row - right.Row
-                );
-        }
-        /// <summary>
-        /// Multiplies two coordinates component-wise.
-        /// </summary>
-        /// <param name="left">The first coordinate.</param>
-        /// <param name="right">The second coordinate.</param>
-        /// <returns>The product of the two coordinates.</returns>
-        public static Coordinates operator *(Coordinates left, Coordinates right)
-        {
-            return 
-                new
-                (
-                    left.Col * right.Col,
-                    left.Row * right.Row
-                );
-        }
-        /// <summary>
-        /// Divides one coordinate by another component-wise.
-        /// </summary>
-        /// <param name="left">The coordinate to divide.</param>
-        /// <param name="right">The coordinate to divide by.</param>
-        /// <returns>The quotient of the two coordinates. If a component of <paramref name="right"/> is zero,
-        /// the corresponding component of <paramref name="left"/> is returned unchanged.</returns>
-        public static Coordinates operator /(Coordinates left, Coordinates right)
-        {
-            return 
-                new
-                (
-                    right.Col == 0 ? left.Col : left.Col / right.Col,
-                    right.Row == 0 ? left.Row : left.Row / right.Row
-                );
-        }
-        /// <summary>
-        /// Adds a direction to a coordinate.
-        /// </summary>
-        /// <param name="left">The coordinate.</param>
-        /// <param name="right">The direction to add.</param>
-        /// <returns>The resulting coordinate.</returns>
-        public static Coordinates operator +(Coordinates left, Direction right)
-        {
-            return 
-                new
-                (
-                    left.Col + right.Horizontal,
-                    left.Row + right.Vertical
-                );
-        }
-        /// <summary>
-        /// Subtracts a direction from a coordinate.
-        /// </summary>
-        /// <param name="left">The coordinate.</param>
-        /// <param name="right">The direction to subtract.</param>
-        /// <returns>The resulting coordinate.</returns>
-        public static Coordinates operator -(Coordinates left, Direction right)
-        {
-            return 
-                new
-                (
-                    left.Col - right.Horizontal,
-                    left.Row - right.Vertical
-                );
-        }
-        /// <summary>
-        /// Multiplies a coordinate by a direction component-wise.
-        /// </summary>
-        /// <param name="left">The coordinate.</param>
-        /// <param name="right">The direction to multiply by.</param>
-        /// <returns>The resulting coordinate.</returns>
-        public static Coordinates operator *(Coordinates left, Direction right)
-        {
-            return 
-                new
-                (
-                    left.Col * right.Horizontal,
-                    left.Row * right.Vertical
-                );
-        }
-        /// <summary>
-        /// Divides a coordinate by a direction component-wise.
-        /// </summary>
-        /// <param name="left">The coordinate.</param>
-        /// <param name="right">The direction to divide by.</param>
-        /// <returns>The resulting coordinate. If a component of <paramref name="right"/> is zero, the corresponding component of <paramref name="left"/> is returned unchanged.</returns>
-        public static Coordinates operator /(Coordinates left, Direction right)
-        {
-            return 
-                new
-                (
-                    right.Horizontal == 0 ? left.Col : left.Col / right.Horizontal,
-                    right.Vertical == 0 ? left.Row : left.Row / right.Vertical
-                );
-        }
-        /// <summary>
-        /// Adds an integer to both components of a coordinate.
-        /// </summary>
-        /// <param name="left">The coordinate.</param>
-        /// <param name="right">The integer to add.</param>
-        /// <returns>The resulting coordinate.</returns>
-        public static Coordinates operator +(Coordinates left, int right)
-        {
-            return 
-                new
-                (
-                    left.Col + right,
-                    left.Row + right
-                );
-        }
-        /// <summary>
-        /// Subtracts an integer from both components of a coordinate.
-        /// </summary>
-        /// <param name="left">The coordinate.</param>
-        /// <param name="right">The integer to subtract.</param>
-        /// <returns>The resulting coordinate.</returns>
-        public static Coordinates operator -(Coordinates left, int right)
-        {
-            return 
-                new
-                (
-                    left.Col - right,
-                    left.Row - right
-                );
-        }
-        /// <summary>
-        /// Multiplies both components of a coordinate by an integer.
-        /// </summary>
-        /// <param name="left">The coordinate.</param>
-        /// <param name="right">The integer to multiply by.</param>
-        /// <returns>The resulting coordinate.</returns>
-        public static Coordinates operator *(Coordinates left, int right)
-        {
-            return 
-                new
-                (
-                    left.Col * right,
-                    left.Row * right
-                );
-        }
-        /// <summary>
-        /// Divides both components of a coordinate by an integer.
-        /// </summary>
-        /// <param name="left">The coordinate.</param>
-        /// <param name="right">The integer to divide by.</param>
-        /// <returns>The resulting coordinate. If <paramref name="right"/> is zero, the original coordinate is returned.</returns>
-        public static Coordinates operator /(Coordinates left, int right)
-        {
-            if (right == 0) return left;
-            return 
-                new
-                (
-                    left.Col / right,
-                    left.Row / right
-                );
-        }
-        
-        #endregion
-    }
-
+    #region Members
+    
     /// <summary>
     /// The number of rows in the grid.
     /// </summary>
     public readonly int Rows;
+   
     /// <summary>
     /// The number of columns in the grid.
     /// </summary>
     public readonly int Cols;
+    
     /// <summary>
     /// The direction in which the grid is placed.
     /// </summary>
     public readonly Direction Placement;
+    
     /// <summary>
     /// Indicates if the grid is oriented top-to-bottom first.
     /// </summary>
     public readonly bool IsTopToBottomFirst;
+    
+    #endregion
+
+    #region Get Direction
     
     /// <summary>
     /// Get the direction for what is considered the next item.
@@ -344,11 +49,12 @@ public readonly struct Grid : IEquatable<Grid>
 
         if (IsGrid)
         {
-            return new(0, Placement.Vertical);
+            return IsTopToBottomFirst ? new(0, Placement.Vertical) : new(Placement.Horizontal, 0);
         }
 
         return Placement;
     }
+    
     /// <summary>
     /// Get the direction for what is considered the previous item.
     /// Standard Vertical Grid with 1 column that is top to bottom first would return new Direction(0, -1)
@@ -360,37 +66,49 @@ public readonly struct Grid : IEquatable<Grid>
         
         if (IsGrid)
         {
-            return new(0, -Placement.Vertical);
+            return IsTopToBottomFirst ? new(0, -Placement.Vertical) : new(-Placement.Horizontal, 0);
         }
 
         return new(-Placement.Horizontal, -Placement.Vertical);//reversed for previous
     }
     
+    #endregion
+    
+    #region Getters
+    
     /// <summary>
     /// Indicates if the grid is oriented left-to-right first.
     /// </summary>
     public bool IsLeftToRightFirst => !IsTopToBottomFirst;
+ 
     /// <summary>
     /// Gets whether the grid is valid (both rows and columns are positive).
     /// </summary>
     public bool IsValid => Rows > 0 && Cols > 0;
+    
     /// <summary>
     /// Gets whether the grid is horizontal (one row with positive columns).
     /// </summary>
     public bool IsHorizontal => Cols > 0 && Rows == 1;
+    
     /// <summary>
     /// Gets whether the grid is vertical (one column with positive rows).
     /// </summary>
     public bool IsVertical => Rows > 0 && Cols == 1;
+    
     /// <summary>
     /// Gets whether the grid is a true grid (positive rows and columns).
     /// </summary>
     public bool IsGrid => Cols > 1 && Rows > 1;
+    
     /// <summary>
     /// Gets the total number of cells in the grid, or -1 if invalid.
     /// </summary>
     public int Count => Rows < 0 || Cols < 0 ? -1 : Rows * Cols;
     
+    #endregion
+    
+    #region Constructors
     
     /// <summary>
     /// Initializes an empty grid (0x0).
@@ -402,6 +120,7 @@ public readonly struct Grid : IEquatable<Grid>
         this.Placement = Direction.Empty;
         this.IsTopToBottomFirst = false;
     }
+
     /// <summary>
     /// Initializes a grid with the specified number of columns and rows.
     /// </summary>
@@ -418,6 +137,7 @@ public readonly struct Grid : IEquatable<Grid>
         );
         this.IsTopToBottomFirst = false;
     }
+    
     /// <summary>
     /// Initializes a grid with the specified number of columns and rows,
     /// with optional reversal of horizontal and vertical orientations.
@@ -437,6 +157,7 @@ public readonly struct Grid : IEquatable<Grid>
             );
         this.IsTopToBottomFirst = false;
     }
+    
     /// <summary>
     /// Initializes a grid with the specified number of columns and rows,
     /// with optional reversal of horizontal and vertical orientations,
@@ -459,7 +180,10 @@ public readonly struct Grid : IEquatable<Grid>
         this.IsTopToBottomFirst = isTopToBottomFirst;
     }
 
-
+    #endregion
+    
+    #region Static Methods
+    
     /// <summary>
     /// Creates a standard vertical grid with the specified number of rows and reversal option.
     /// </summary>
@@ -467,6 +191,7 @@ public readonly struct Grid : IEquatable<Grid>
     /// <param name="reversed">Whether to reverse the vertical orientation.</param>
     /// <returns>A vertical <see cref="Grid"/>.</returns>
     public static Grid GetVerticalGrid(int rows, bool reversed) => new(1, rows, false, reversed, false);
+  
     /// <summary>
     /// Creates a standard horizontal grid with the specified number of columns and reversal option.
     /// </summary>
@@ -475,14 +200,17 @@ public readonly struct Grid : IEquatable<Grid>
     /// <returns>A horizontal <see cref="Grid"/>.</returns>
     public static Grid GetHorizontalGrid(int cols, bool reversed) => new(cols, 1, reversed, false, false);
     
+    #endregion
     
+    #region Public Methods
     
     /// <summary>
     /// Determines if the given index is within the bounds of the grid.
     /// </summary>
     /// <param name="index">The index to check.</param>
     /// <returns>True if the index is within bounds, otherwise false.</returns>
-    public bool IsIndexInBounds(int index) => index >= 0 && index <= Count;
+    public bool IsIndexInBounds(int index) => index >= 0 && index < Count;
+  
     /// <summary>
     /// Calculates the size of each cell in the grid based on the given bounds.
     /// </summary>
@@ -500,6 +228,7 @@ public readonly struct Grid : IEquatable<Grid>
     {
         return CoordinatesToIndex(GetCellCoordinate(pos, bounds));
     }
+  
     /// <summary>
     /// Gets the index of the cell at the given position within the specified bounds, unclamped.
     /// </summary>
@@ -508,10 +237,11 @@ public readonly struct Grid : IEquatable<Grid>
     /// <returns>The index of the cell, or -1 if out of bounds.</returns>
     public int GetCellIndexUnclamped(Vector2 pos, Rect bounds)
     {
-        var result = GetCellCoordinate(pos, bounds);
+        var result = GetCellCoordinateUnclamped(pos, bounds);
         if (!AreCoordinatesInside(result)) return -1;
         return CoordinatesToIndex(result);
     }
+    
     /// <summary>
     /// Gets the grid coordinates of the cell at the given position within the specified bounds.
     /// </summary>
@@ -521,10 +251,17 @@ public readonly struct Grid : IEquatable<Grid>
     public Coordinates GetCellCoordinate(Vector2 pos, Rect bounds)
     {
         var cellSize = GetCellSize(bounds);
-        int xi = Math.Clamp((int)Math.Floor((pos.X - bounds.X) / cellSize.Width), 0, Cols - 1);
-        int yi = Math.Clamp((int)Math.Floor((pos.Y - bounds.Y) / cellSize.Height), 0, Rows - 1);
+        var alignment = Placement.Invert().ToAlignement();
+        var origin = bounds.GetPoint(alignment);
+        var placement = Placement.ToVector2();
+        
+        var x = (pos.X - origin.X) * placement.X;
+        var y = (pos.Y - origin.Y) * placement.Y;
+        int xi = Math.Clamp((int)Math.Floor(x / cellSize.Width), 0, Cols - 1);
+        int yi = Math.Clamp((int)Math.Floor(y / cellSize.Height), 0, Rows - 1);
         return new(xi, yi);
     }
+   
     /// <summary>
     /// Gets the grid coordinates of the cell at the given position within the specified bounds, unclamped.
     /// </summary>
@@ -534,10 +271,17 @@ public readonly struct Grid : IEquatable<Grid>
     public Coordinates GetCellCoordinateUnclamped(Vector2 pos, Rect bounds)
     {
         var cellSize = GetCellSize(bounds);
-        int xi = (int)Math.Floor((pos.X - bounds.X) / cellSize.Width);
-        int yi = (int)Math.Floor((pos.Y - bounds.Y) / cellSize.Height);
+        var alignment = Placement.Invert().ToAlignement();
+        var origin = bounds.GetPoint(alignment);
+        var placement = Placement.ToVector2();
+        
+        var x = (pos.X - origin.X) * placement.X;
+        var y = (pos.Y - origin.Y) * placement.Y;
+        int xi = (int)Math.Floor(x / cellSize.Width);
+        int yi = (int)Math.Floor(y / cellSize.Height);
         return new(xi, yi);
     }
+    
     /// <summary>
     /// Clamps the given coordinates to be within the bounds of the grid.
     /// </summary>
@@ -545,8 +289,8 @@ public readonly struct Grid : IEquatable<Grid>
     /// <returns>The clamped coordinates.</returns>
     public Coordinates ClampCoordinates(Coordinates coordinates)
     {
-        var col = coordinates.Col < 0 ? 0 : coordinates.Col > Cols ? Cols - 1 : coordinates.Col;
-        var row = coordinates.Row < 0 ? 0 : coordinates.Row > Rows ? Rows - 1 : coordinates.Row;
+        var col = coordinates.Col < 0 ? 0 : coordinates.Col >= Cols ? Cols - 1 : coordinates.Col;
+        var row = coordinates.Row < 0 ? 0 : coordinates.Row >= Rows ? Rows - 1 : coordinates.Row;
         return new(col, row);
         
     }
@@ -573,11 +317,15 @@ public readonly struct Grid : IEquatable<Grid>
     /// <returns>The rectangle representing the cell's bounds.</returns>
     public Rect GetRect(Rect bounds, Coordinates coordinates)
     {
-        var cellSize = GetCellSize(bounds);
+        if (!IsValid || !Placement.IsValid) return new();
+        
         var alignment = Placement.Invert().ToAlignement();
-        var pos = bounds.GetPoint(alignment);
-        return new(pos, cellSize, alignment);
+        var boundsPos = bounds.GetPoint(alignment);
+        var cellSize = GetCellSize(bounds);
+        var rectPos = boundsPos + cellSize * coordinates.ToVector2() * Placement.ToVector2();
+        return new Rect(rectPos, cellSize, alignment);
     }
+
     /// <summary>
     /// Determines if the given coordinates are inside the bounds of the grid.
     /// </summary>
@@ -601,11 +349,13 @@ public readonly struct Grid : IEquatable<Grid>
     {
         var topLeft = GetCellCoordinate(rect.TopLeft, bounds);
         var bottomRight = GetCellCoordinate(rect.BottomRight, bounds);
+        var min = topLeft.Min(bottomRight);
+        var max = topLeft.Max(bottomRight);
 
         int count = indices.Count;
-        for (int j = topLeft.Row; j <= bottomRight.Row; j++)
+        for (int j = min.Row; j <= max.Row; j++)
         {
-            for (int i = topLeft.Col; i <= bottomRight.Col; i++)
+            for (int i = min.Col; i <= max.Col; i++)
             {
                 int id = CoordinatesToIndex(new(i, j));
                 indices.Add(id);
@@ -622,7 +372,9 @@ public readonly struct Grid : IEquatable<Grid>
     /// <returns>The coordinates corresponding to the index.</returns>
     public Coordinates IndexToCoordinates(int index)
     {
-        if (!IsValid) return new();
+        if (!IsValid) return new(-1, -1);
+        
+        if(!IsIndexInBounds(index)) return new(-1, -1);
         
         if (!IsTopToBottomFirst)
         {
@@ -646,15 +398,19 @@ public readonly struct Grid : IEquatable<Grid>
     /// <returns>The index corresponding to the coordinates.</returns>
     public int CoordinatesToIndex(Coordinates coordinates)
     {
-        if (!IsValid || !coordinates.IsValid) return -1;
+        if (!IsValid || !coordinates.IsPositive) return -1;
         
         if (IsLeftToRightFirst)
         {
-            return coordinates.Row * Cols + coordinates.Col;
+            var index = coordinates.Row * Cols + coordinates.Col;
+            if(!IsIndexInBounds(index)) return -1;
+            return index;
         }
         else
         {
-            return coordinates.Col * Rows + coordinates.Row;
+            var index = coordinates.Col * Rows + coordinates.Row;
+            if(!IsIndexInBounds(index)) return -1;
+            return index;
         }
     }
 
@@ -665,7 +421,7 @@ public readonly struct Grid : IEquatable<Grid>
     /// <returns>A <see cref="Direction"/> indicating the movement direction.</returns>
     public Direction GetDirection(Coordinates coordinates)
     {
-        if (!coordinates.IsValid) return new();
+        if (!coordinates.IsPositive) return new();
 
 
         var hor = coordinates.Col == 0 ? -1 : coordinates.Col >= Cols - 1 ? 1 : 0;
@@ -688,9 +444,9 @@ public readonly struct Grid : IEquatable<Grid>
 
         if (IsLeftToRightFirst)
         {
-            for (var row = 0; row <= Rows; row++)
+            for (var row = 0; row < Rows; row++)
             {
-                for (var col = 0; col <= Cols; col++)
+                for (var col = 0; col < Cols; col++)
                 {
                     var coordinates = new Coordinates(col, row);
                     result.Add(GetRect(bounds, coordinates));
@@ -701,9 +457,9 @@ public readonly struct Grid : IEquatable<Grid>
         else
         {
             
-            for (var col = 0; col <= Cols; col++)
+            for (var col = 0; col < Cols; col++)
             {
-                for (var row = 0; row <= Rows; row++)
+                for (var row = 0; row < Rows; row++)
                 {
                     var coordinates = new Coordinates(col, row);
                     result.Add(GetRect(bounds, coordinates));
@@ -716,6 +472,8 @@ public readonly struct Grid : IEquatable<Grid>
         return result.Count - count;
     }
 
+    #endregion
+    
     #region Operators
     /// <summary>
     /// Determines whether this grid is equal to another grid.

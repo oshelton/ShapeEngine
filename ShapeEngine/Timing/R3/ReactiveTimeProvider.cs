@@ -29,7 +29,7 @@ public class ReactiveTimeProvider : TimeProvider, IDisposable
 
     public override long GetTimestamp()
     {
-        return GameTime.TotalFrames;
+        return GameTime.TotalTicks;
     }
 
     public void Dispose()

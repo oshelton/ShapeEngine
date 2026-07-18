@@ -1,5 +1,6 @@
 using System.Numerics;
 using Raylib_cs;
+using ShapeEngine.Core.GameDef;
 using ShapeEngine.Core.Structs;
 using ShapeEngine.Geometry.RectDef;
 using ShapeEngine.Screen;
@@ -67,11 +68,6 @@ public sealed class GameWindow
         /// Indicates whether the window allows mouse pass-through.
         /// </summary>
         public readonly bool MousePassThrough;
-
-        /// <summary>
-        /// Indicates whether VSync is enabled for the window.
-        /// </summary>
-        public readonly bool VSync;
         
         /// <summary>
         /// Gets the current window configuration flags from Raylib.
@@ -98,7 +94,6 @@ public sealed class GameWindow
             Focused = value;
             AlwaysRun = value;
             MousePassThrough = value;
-            VSync = value;
             Minimized = value;
             Maximized = value;
             Fullscreen = value;
@@ -116,7 +111,6 @@ public sealed class GameWindow
             Focused = !Raylib.IsWindowState(ConfigFlags.UnfocusedWindow);
             AlwaysRun = Raylib.IsWindowState(ConfigFlags.AlwaysRunWindow);
             MousePassThrough = Raylib.IsWindowState(ConfigFlags.MousePassthroughWindow);
-            VSync = Raylib.IsWindowState(ConfigFlags.VSyncHint);
             Minimized = Raylib.IsWindowState(ConfigFlags.MinimizedWindow);
             Maximized = Raylib.IsWindowState(ConfigFlags.MaximizedWindow);
             Fullscreen = Raylib.IsWindowFullscreen();
@@ -135,8 +129,6 @@ public sealed class GameWindow
         public bool HasAlwaysRunChanged(WindowConfigFlags other) => AlwaysRun != other.AlwaysRun;
         /// <summary>Checks if the MousePassThrough flag has changed compared to another instance.</summary>
         public bool HasMousePassThroughChanged(WindowConfigFlags other) => MousePassThrough != other.MousePassThrough;
-        /// <summary>Checks if the VSync flag has changed compared to another instance.</summary>
-        public bool HasVSyncChanged(WindowConfigFlags other) => VSync != other.VSync;
         /// <summary>Checks if the Minimized flag has changed compared to another instance.</summary>
         public bool HasMinimizedChanged(WindowConfigFlags other) => Minimized != other.Minimized;
         /// <summary>Checks if the Maximized flag has changed compared to another instance.</summary>
@@ -149,12 +141,34 @@ public sealed class GameWindow
 
     /// <summary>
     /// Represents the state of the mouse cursor (visibility, enabled, on screen).
+    /// This is the single source of truth for all cursor state.
     /// </summary>
     private readonly struct CursorState
     {
+        /// <summary>
+        /// Whether the cursor is currently visible in Raylib.
+        /// </summary>
         public readonly bool Visible;
+        
+        /// <summary>
+        /// Whether the cursor is currently enabled in Raylib.
+        /// </summary>
         public readonly bool Enabled;
+        
+        /// <summary>
+        /// Whether the cursor is currently on screen.
+        /// </summary>
         public readonly bool OnScreen;
+        
+        /// <summary>
+        /// What the user wants the cursor visibility to be (may differ from Visible when off-screen).
+        /// </summary>
+        public readonly bool DesiredVisible;
+        
+        /// <summary>
+        /// What the user wants the cursor enabled state to be (may differ from Enabled when off-screen).
+        /// </summary>
+        public readonly bool DesiredEnabled;
 
         /// <summary>
         /// Initializes a new instance of <see cref="CursorState"/> with all states set to true.
@@ -164,16 +178,60 @@ public sealed class GameWindow
             Visible = true;
             Enabled = true;
             OnScreen = true;
+            DesiredVisible = true;
+            DesiredEnabled = true;
         }
 
         /// <summary>
         /// Initializes a new instance of <see cref="CursorState"/> with specified states.
         /// </summary>
-        public CursorState(bool visible, bool enabled, bool onScreen)
+        public CursorState(bool visible, bool enabled, bool onScreen, bool desiredVisible, bool desiredEnabled)
         {
             Visible = visible;
             Enabled = enabled;
             OnScreen = onScreen;
+            DesiredVisible = desiredVisible;
+            DesiredEnabled = desiredEnabled;
+        }
+        
+        /// <summary>
+        /// Creates a new CursorState with updated desired visibility.
+        /// </summary>
+        public CursorState WithDesiredVisible(bool desiredVisible)
+        {
+            return new CursorState(Visible, Enabled, OnScreen, desiredVisible, DesiredEnabled);
+        }
+        
+        /// <summary>
+        /// Creates a new CursorState with updated desired enabled state.
+        /// </summary>
+        public CursorState WithDesiredEnabled(bool desiredEnabled)
+        {
+            return new CursorState(Visible, Enabled, OnScreen, DesiredVisible, desiredEnabled);
+        }
+        
+        /// <summary>
+        /// Creates a new CursorState with updated actual visibility.
+        /// </summary>
+        public CursorState WithVisible(bool visible)
+        {
+            return new CursorState(visible, Enabled, OnScreen, DesiredVisible, DesiredEnabled);
+        }
+        
+        /// <summary>
+        /// Creates a new CursorState with updated actual enabled state.
+        /// </summary>
+        public CursorState WithEnabled(bool enabled)
+        {
+            return new CursorState(Visible, enabled, OnScreen, DesiredVisible, DesiredEnabled);
+        }
+        
+        /// <summary>
+        /// Creates a new CursorState with updated on-screen state.
+        /// </summary>
+        public CursorState WithOnScreen(bool onScreen)
+        {
+            return new CursorState(Visible, Enabled, onScreen, DesiredVisible, DesiredEnabled);
         }
     }
     #endregion
@@ -184,14 +242,17 @@ public sealed class GameWindow
     /// Occurs when the mouse leaves the window screen area.
     /// </summary>
     public event Action? OnMouseLeftScreen;
+ 
     /// <summary>
     /// Occurs when the mouse enters the window screen area.
     /// </summary>
     public event Action? OnMouseEnteredScreen;
+    
     /// <summary>
     /// Occurs when the mouse visibility changes.
     /// </summary>
     public event Action<bool>? OnMouseVisibilityChanged;
+    
     /// <summary>
     /// Occurs when the mouse enabled state changes.
     /// </summary>
@@ -201,10 +262,12 @@ public sealed class GameWindow
     /// Occurs when the window size changes.
     /// </summary>
     public event Action<DimensionConversionFactors>? OnWindowSizeChanged;
+    
     /// <summary>
     /// Occurs when the window position changes.
     /// </summary>
     public event Action<Vector2, Vector2>? OnWindowPositionChanged;
+    
     /// <summary>
     /// Occurs when the monitor changes.
     /// </summary>
@@ -214,22 +277,27 @@ public sealed class GameWindow
     /// Occurs when the window focus changes.
     /// </summary>
     public event Action<bool>? OnWindowFocusChanged;
+    
     /// <summary>
     /// Occurs when the window fullscreen state changes.
     /// </summary>
     public event Action<bool>? OnWindowFullscreenChanged;
+    
     /// <summary>
     /// Occurs when the window maximize state changes.
     /// </summary>
     public event Action<bool>? OnWindowMaximizeChanged;
+    
     /// <summary>
     /// Occurs when the window minimized state changes.
     /// </summary>
     public event Action<bool>? OnWindowMinimizedChanged;
+    
     /// <summary>
     /// Occurs when the window hidden state changes.
     /// </summary>
     public event Action<bool>? OnWindowHiddenChanged;
+    
     /// <summary>
     /// Occurs when the window topmost state changes.
     /// </summary>
@@ -239,22 +307,26 @@ public sealed class GameWindow
     /// Occurs when the window undecorated state changes.
     /// </summary>
     public event Action<bool>? OnWindowUndecoratedChanged;
+    
     /// <summary>
     /// Occurs when the window resizable state changes.
     /// </summary>
     public event Action<bool>? OnWindowResizableChanged;
+    
     /// <summary>
     /// Occurs when the window always-run state changes.
     /// </summary>
     public event Action<bool>? OnWindowAlwaysRunChanged;
+    
     /// <summary>
     /// Occurs when the window mouse pass-through state changes.
     /// </summary>
     public event Action<bool>? OnWindowMousePassThroughChanged;
+    
     /// <summary>
     /// Occurs when the window VSync state changes.
     /// </summary>
-    public event Action<bool>? OnWindowVSyncChanged;
+    public event Action<VsyncMode>? OnWindowVSyncChanged;
 
     #endregion
 
@@ -273,22 +345,27 @@ public sealed class GameWindow
     /// Gets the conversion factors from screen to monitor coordinates.
     /// </summary>
     public DimensionConversionFactors ScreenToMonitor { get; private set; }
+  
     /// <summary>
     /// Gets the conversion factors from monitor to screen coordinates.
     /// </summary>
     public DimensionConversionFactors MonitorToScreen { get; private set; }
+  
     /// <summary>
     /// Gets the monitor device associated with the window.
     /// </summary>
     public MonitorDevice Monitor { get; private set; }
+    
     /// <summary>
     /// Gets the current screen size of the window.
     /// </summary>
     public Dimensions CurScreenSize { get; private set; }
+    
     /// <summary>
     /// Gets the minimum allowed window size.
     /// </summary>
     public Dimensions WindowMinSize { get; private set; }
+    
     /// <summary>
     /// Gets or sets the window size.
     /// </summary>
@@ -297,7 +374,7 @@ public sealed class GameWindow
         get => windowSize;
         set
         {
-            var maxSize = Monitor.CurMonitor().Dimensions;
+            var maxSize = GetCurrentMonitorDimensions(); // Monitor.CurMonitor().Dimensions;
             int w = value.Width;
             if (w < WindowMinSize.Width) w = WindowMinSize.Width;
             else if (w > maxSize.Width) w = maxSize.Width;
@@ -318,6 +395,7 @@ public sealed class GameWindow
             //CheckForWindowChanges();
         }
     }
+    
     /// <summary>
     /// Gets the current window position on the screen.
     /// </summary>
@@ -327,95 +405,159 @@ public sealed class GameWindow
     /// Gets the current display state of the window.
     /// </summary>
     public WindowDisplayState DisplayState { get; private set; }
+    
     /// <summary>
     /// Gets the current window border style.
     /// </summary>
     public WindowBorder WindowBorder { get; private set; }
 
-   /// <summary>
-   /// Gets or sets the minimum allowed framerate.
-   /// </summary>
-   /// <remarks>If set, updates <see cref="FpsLimit"/> if it is below the new minimum.</remarks>
-    public int MinFramerate
-    {
-        get => minFramerate;
-        set
-        {
-            if (value == minFramerate) return;
-            if (value <= 0) minFramerate = 1;
-            else if (value >= maxFramerate)
-            {
-                minFramerate = maxFramerate;
-                maxFramerate = value;
-            }
-            else minFramerate = value;
-
-            if (FpsLimit < minFramerate) fpsLimit = minFramerate;
-        }
-    }
     /// <summary>
-    /// Gets or sets the maximum allowed framerate for the window.
+    /// If enabled the FPS limiter will dynamically adjust the frame rate limit based on performance.
+    /// If an <see cref="FpsLimit"/> is set (whether through <see cref="VSync"/> with a valid monitor refresh rate or manually),
+    /// the adaptive limiter will try to keep the frame rate close to that limit and reduce the limit if performance drops.
+    /// If no <see cref="FpsLimit"/> is set (0 = unlimited), the adaptive limiter will try to keep the frame rate between its configured minimum and maximum limits,
+    /// trying to reach the maximum limit when possible and never going below the minimum limit.
+    /// </summary>
     /// <remarks>
-    /// If set below <see cref="MinFramerate"/>, both values will be synchronized.
-    /// If set, updates <see cref="FpsLimit"/> if it is above the new maximum.
+    /// Can be enabled or disabled through <see cref="AdaptiveFpsLimiter.Enabled"/> at any time.
     /// </remarks>
-    /// </summary>
-    public int MaxFramerate
-    {
-        get => maxFramerate;
-        set
-        {
-            if (value == maxFramerate) return;
-            if (value <= minFramerate)
-            {
-                maxFramerate = minFramerate;
-                minFramerate = value;
-            }
-            else maxFramerate = value;
-
-            if (FpsLimit > maxFramerate) fpsLimit = maxFramerate;
-        }
-    }
+    public AdaptiveFpsLimiter AdaptiveFpsLimiter { get; private set; }
+    
     /// <summary>
-    /// Gets or sets the framerate limit.
+    /// Gets the minimum frame rate the window should attempt to maintain when applying frame rate limiting.
+    /// A value of 0 indicates that no explicit minimum frame rate constraint is enforced.
     /// </summary>
+    public int MinFrameRate { get; private set; }
+  
+    /// <summary>
+    /// Gets the maximum frame rate the window should not exceed when applying frame rate limiting.
+    /// A value of 0 indicates that no explicit maximum frame rate constraint is enforced.
+    /// </summary>
+    public int MaxFrameRate { get; private set; }
+    
+    /// <summary>
+    /// Gets or sets the frames-per-second limit used when VSync is disabled. 0 means unlimited.
+    /// <see cref="VSync"/> has to be <see cref="VsyncMode.Disabled"/> to allow an unlimited frame rate.
+    /// </summary>
+    /// <remarks>
+    /// When VSync is disabled, assigning to this property will update <see cref="TargetFps"/> accordingly.
+    /// Otherwise, changing this property has no immediate effect until VSync is set to <see cref="VsyncMode.Disabled"/>. 
+    /// </remarks>
     public int FpsLimit
     {
         get => fpsLimit;
         set
         {
-            if (value < MinFramerate) fpsLimit = MinFramerate;
-            else if (value > MaxFramerate) fpsLimit = MaxFramerate;
-            else fpsLimit = value;
-            if(!VSync) Raylib.SetTargetFPS(fpsLimit);
-        }
-    }
-    /// <summary>
-    /// Gets the current frames per second.
-    /// </summary>
-    public int Fps => Raylib.GetFPS();
-    /// <summary>
-    /// Gets or sets whether VSync is enabled.
-    /// </summary>
-    public bool VSync
-    {
-        get => Raylib.IsWindowState(ConfigFlags.VSyncHint);
-        set
-        {
-            if (Raylib.IsWindowState(ConfigFlags.VSyncHint) == value) return;
-            if (value)
+            fpsLimit = value < 0 ? 0 : value;
+
+            if (fpsLimit > 0)
             {
-                Raylib.SetWindowState(ConfigFlags.VSyncHint);
-                Raylib.SetTargetFPS(Monitor.CurMonitor().Refreshrate);
+                if(MinFrameRate > 0 && fpsLimit < MinFrameRate) fpsLimit = MinFrameRate;
+                if(MaxFrameRate > 0 && fpsLimit > MaxFrameRate) fpsLimit = MaxFrameRate;
             }
             else
             {
-                Raylib.ClearWindowState(ConfigFlags.VSyncHint);
-                Raylib.SetTargetFPS(fpsLimit);
+                fpsLimit = MaxFrameRate > 0 ? MaxFrameRate : 0;
             }
+            
+            if(VSync == VsyncMode.Disabled) TargetFps = fpsLimit;
         }
     }
+    
+    /// <summary>
+    /// Gets the current target frames-per-second used by the engine.
+    /// </summary>
+    /// <remarks>
+    /// This property reflects the effective FPS cap whether driven by VSync (monitor refresh)
+    /// or by the manual <see cref="FpsLimit"/> when VSync is disabled.
+    /// </remarks>
+    public int TargetFps
+    {
+        get => targetFps;
+        private set => targetFps = value;
+    }
 
+    /// <summary>
+    /// Determines whether the unfocused FPS limit is currently active.
+    /// </summary>
+    /// <remarks>
+    /// The unfocused target FPS limit is considered active when <see cref="UnfocusedFrameRateLimit"/>
+    /// is greater than zero and the cached window focus state indicates the window is not focused.
+    /// This method does not query focus from the OS directly;
+    /// it relies on the last-polled window configuration flags.
+    /// </remarks>
+    /// <returns>
+    /// True if an unfocused FPS limit is set and the window is not focused; otherwise false.
+    /// </returns>
+    internal bool IsUnfocusedFrameRateLimitActive()
+    {
+        return UnfocusedFrameRateLimit > 0 && !windowConfigFlags.Focused;
+    }
+  
+    /// <summary>
+    /// Target frames-per-second to apply when the window is unfocused (in FPS).
+    /// A value of 0 disables the unfocused frame rate limit (no restriction).
+    /// Used by <see cref="IsUnfocusedFrameRateLimitActive"/> to decide if the unfocused cap is active.
+    /// </summary>
+    /// <remarks>
+    /// If <see cref="GameDef.Game.IdleFrameRateLimit"/> is active as well, the lower of the two limits will be used.
+    /// </remarks>
+    public int UnfocusedFrameRateLimit;
+    
+    /// <summary>
+    /// Gets or sets the current vertical sync mode for the window.
+    /// Changing this property updates the effective <see cref="TargetFps"/> according to the selected <see cref="VsyncMode"/>.
+    /// Setting to <see cref="VsyncMode.Disabled"/> causes the engine to use the manual <see cref="FpsLimit"/> for frame limiting.
+    /// </summary>
+    public VsyncMode VSync
+    {
+        get => vsync;
+        set
+        {
+            if (vsync == value) return;
+            
+            int newLimit = ComputeTargetFpsFromMode(value);
+            if (newLimit <= 0)
+            {
+                TargetFps = fpsLimit;
+                vsync = VsyncMode.Disabled;
+            }
+            else
+            {
+                TargetFps = newLimit;
+                vsync = value;
+            }
+            
+            OnWindowVSyncChanged?.Invoke(vsync);
+        }
+    }
+    
+    /// <summary>
+    /// Computes the effective target frames-per-second for the provided <see cref="VsyncMode"/>.
+    /// Returns 0 when VSync is disabled or when the monitor refresh rate is unknown/invalid.
+    /// </summary>
+    /// <param name="mode">The VSync mode to compute the target FPS for.</param>
+    /// <returns>The calculated target FPS based on the current monitor refresh rate and the requested mode.</returns>
+    private int ComputeTargetFpsFromMode(VsyncMode mode)
+    {
+        if(mode == VsyncMode.Disabled) return 0;
+        
+        int refresh = Monitor.CurMonitor().Refreshrate;
+        if(refresh <= 0) return 0;
+
+        int value = 0;
+        switch (mode)
+        {
+            case VsyncMode.Half: value = Math.Max(30, refresh / 2); break;
+            case VsyncMode.Normal: value = refresh; break;
+            case VsyncMode.Double: value = refresh * 2; break;
+            case VsyncMode.Quadruple: value = refresh * 4; break;
+        }
+        if(MinFrameRate > 0 && value < MinFrameRate) value = MinFrameRate;
+        if(MaxFrameRate > 0 && value > MaxFrameRate) value = MaxFrameRate;
+        return value;
+    }
+    
     /// <summary>
     /// Gets whether the mouse is currently on the window screen.
     /// </summary>
@@ -425,10 +567,11 @@ public sealed class GameWindow
         private set
         {
             mouseOnScreen = value;
-            // IsMouseOnScreen = value;
         }
     }
+  
     private bool mouseOnScreen;
+    
     /// <summary>
     /// Gets the area of the screen as a rectangle.
     /// </summary>
@@ -436,31 +579,46 @@ public sealed class GameWindow
 
     /// <summary>
     /// Gets or sets whether the window should automatically restore from fullscreen when focus is lost.
+    /// This only affects fullscreen mode and does not affect borderless fullscreen!
     /// </summary>
     public bool FullscreenAutoRestoring { get; set; }
+    
+    // public bool BorderlessFullscreenAutoRestoring { get; set; }
+
+    /// <summary>
+    /// Whether the window should use high DPI mode, which allows for better rendering quality on high DPI displays.
+    /// </summary>
+    public readonly bool HighDpi;
     #endregion
 
     #region Private Members
 
-    private Vector2 osxWindowScaleDpi;
-    private int fpsLimit = 60;
-    private int minFramerate;
-    private int maxFramerate;
+    private int fpsLimit;
+    private VsyncMode vsync;
+    private int targetFps;
     private Dimensions windowSize = new();
 
-    private bool? wasMouseEnabled;
-    private bool? wasMouseVisible;
-
+    // CursorState is the single source of truth for all cursor/mouse state.
+    // This struct contains both desired state (what user wants) and actual state (what's applied to Raylib).
+    // When mouse is on screen: desired state is immediately applied to actual state
+    // When mouse leaves screen: actual state is forced visible/enabled (OS requirement)
+    // When mouse returns: actual state is restored to desired state
     private CursorState cursorState;
+    private CursorState previousCursorState;
+    
     private WindowConfigFlags windowConfigFlags;
     private bool wasMaximized;
 
     private Dimensions prevDisplayStateWindowDimensions = new(128, 128);
     private Vector2 prevDisplayStateWindowPosition = new(128, 128);
-
-    private Size prevFullscreenResolution = new(-1, -1);
-    private bool wasFullscreen;
-
+    
+    private bool fullscreenAutoRestoringActive;
+    private bool fullscreenAutoRestoringWindowWasTopmost;
+    
+    // private bool borderlessFullscreenAutoRestoringActive;
+    // private bool borderlessFullscreenAutoRestoringWindowWasTopmost;
+    // private bool borderlessFullscreenAutoRestoringActiveCooldown;
+    
     #endregion
 
     #region Internal Methods
@@ -468,14 +626,16 @@ public sealed class GameWindow
     /// Initializes a new instance of the <see cref="GameWindow"/> class with the specified settings.
     /// </summary>
     /// <param name="windowSettings">The window settings to use.</param>
-    internal GameWindow(WindowSettings windowSettings)
+    /// <param name="framerateSettings">The framerate settings to use.</param>
+    internal GameWindow(WindowSettings windowSettings, FramerateSettings framerateSettings)
     {
         if(windowSettings.Msaa4x) Raylib.SetConfigFlags(ConfigFlags.Msaa4xHint);
         if(windowSettings.HighDPI) Raylib.SetConfigFlags(ConfigFlags.HighDpiWindow);
         if(windowSettings.FramebufferTransparent) Raylib.SetConfigFlags(ConfigFlags.TransparentWindow);
-
-        // Raylib.InitWindow(windowSettings.WindowMinSize.Width, windowSettings.WindowMinSize.Height, windowSettings.Title);
-        Raylib.InitWindow(0,0, windowSettings.Title);//sets autoiconify to false until my changes are in raylib cs
+        
+        HighDpi = windowSettings.HighDPI;
+        
+        Raylib.InitWindow(windowSettings.WindowSize.Width, windowSettings.WindowSize.Height, windowSettings.Title);
         Raylib.SetWindowOpacity(0f);
 
         Monitor = new MonitorDevice();
@@ -485,19 +645,29 @@ public sealed class GameWindow
 
         Raylib.SetWindowState(ConfigFlags.AlwaysRunWindow);
 
-        // if (windowSettings.Focused)
-        // {
-        //     Raylib.ClearWindowState(ConfigFlags.UnfocusedWindow);
-        // }
-        // else Raylib.SetWindowState(ConfigFlags.UnfocusedWindow);
-
         if (windowSettings.Topmost) Raylib.SetWindowState(ConfigFlags.TopmostWindow);
 
         FullscreenAutoRestoring = windowSettings.FullscreenAutoRestoring;
-        VSync = windowSettings.Vsync;
-        MinFramerate = windowSettings.MinFramerate;
-        MaxFramerate = windowSettings.MaxFramerate;
-        FpsLimit = windowSettings.FrameRateLimit;
+        // BorderlessFullscreenAutoRestoring = true;
+        
+        //Setup frame rate variables and vsync directly bypassing getters and setters to avoid logic errors on startup.
+        vsync = windowSettings.Vsync;
+        MinFrameRate = framerateSettings.MinFrameRate;
+        MaxFrameRate = framerateSettings.MaxFrameRate;
+        AdaptiveFpsLimiter = new(framerateSettings.AdaptiveFpsLimiterSettings, framerateSettings.MinFrameRate, framerateSettings.MaxFrameRate);
+        fpsLimit = framerateSettings.FrameRateLimit;
+        UnfocusedFrameRateLimit = framerateSettings.UnfocusedFrameRateLimit;
+        
+        int newLimit = ComputeTargetFpsFromMode(vsync);
+        if (newLimit <= 0)
+        {
+            TargetFps = fpsLimit;
+            vsync = VsyncMode.Disabled;
+        }
+        else
+        {
+            TargetFps = newLimit;
+        }
 
         switch (windowSettings.WindowBorder)
         {
@@ -522,22 +692,42 @@ public sealed class GameWindow
             SetMonitor(windowSettings.Monitor);
         }
 
-        var screenArea = new Rect(0, 0, CurScreenSize.Width, CurScreenSize.Height);
-        MouseOnScreen = Raylib.IsCursorOnScreen() || ( Raylib.IsWindowFocused() && screenArea.ContainsPoint(Raylib.GetMousePosition()) );
+        // Only use Raylib.IsCursorOnScreen() - avoid ScreenArea check to prevent false positives on Windows
+        // screenArea.ContainsPoint(Raylib.GetMousePosition()) -> old safeguard for macOS
+        
+        bool initialMouseOnScreen = Raylib.IsWindowFocused() && Raylib.IsCursorOnScreen();
+        MouseOnScreen = initialMouseOnScreen;
 
-        MouseVisible = windowSettings.MouseVisible;
-        MouseEnabled = windowSettings.MouseEnabled;
-
-        cursorState = GetCurCursorState();
-
-        if (GameDef.Game.IsOSX()) osxWindowScaleDpi = Raylib.GetWindowScaleDPI();
-        else osxWindowScaleDpi = new Vector2(1, 1);
-
+        // Initialize cursor state - CursorState is the single source of truth
+        cursorState = new CursorState(
+            visible: windowSettings.MouseVisible,
+            enabled: windowSettings.MouseEnabled,
+            onScreen: initialMouseOnScreen,
+            desiredVisible: windowSettings.MouseVisible,
+            desiredEnabled: windowSettings.MouseEnabled
+        );
+        previousCursorState = cursorState;
+        
+        // Apply initial cursor state to Raylib
+        ApplyMouseVisibilityToRaylib(cursorState.DesiredVisible);
+        ApplyMouseEnabledToRaylib(cursorState.DesiredEnabled);
+        
         CalculateMonitorConversionFactors();
 
         Raylib.SetWindowOpacity(windowSettings.WindowOpacity);
         windowConfigFlags = WindowConfigFlags.Get();
-
+        
+        
+        // Rationale: ShapeEngine handles frame limiting manually in the game loop for improved timing accuracy and frame pacing.
+        // Raylib's built-in frame limiter (SetTargetFPS) can introduce inconsistent frame pacing and timing inaccuracies.
+        // By implementing a custom frame limiter, ShapeEngine can:
+        //   - Achieve more precise control over frame timing and delta time calculations.
+        //   - Ensure consistent frame pacing across different platforms and hardware.
+        //   - Integrate frame limiting with the engine's own timing, update, and rendering logic.
+        //   - Avoid issues where Raylib's limiter may not synchronize well with vsync or system timers.
+        // For these reasons, we disable Raylib's frame limiting by setting the target FPS to 0, and rely on our own implementation.
+        Raylib.SetTargetFPS(0); // Prevent Raylib from capping FPS.
+        
         Instance = this;
     }
 
@@ -547,26 +737,22 @@ public sealed class GameWindow
     /// <param name="dt">The delta time since the last update.</param>
     internal void Update(float dt)
     {
-        // LerpOpacitiy(dt);
-
         var newMonitor = Monitor.HasMonitorChanged();
         if (newMonitor.Available)
         {
-            ChangeMonitor(newMonitor);
+            UpdateWindowAfterMonitorChange(newMonitor);
         }
         CheckForWindowChanges();
-
+        
         ScreenArea = new Rect(0, 0, CurScreenSize.Width, CurScreenSize.Height);
-
+        
         CheckForWindowConfigFlagChanges();
-        // CheckForWindowFlagChanges();
         CheckForCursorChanges();
-
+        
         CalculateMonitorConversionFactors();
 
-        if (MouseVisible == Raylib.IsCursorHidden()) MouseVisible = !Raylib.IsCursorHidden();
-
     }
+  
     /// <summary>
     /// Moves the mouse cursor to the specified position within the window.
     /// </summary>
@@ -574,13 +760,12 @@ public sealed class GameWindow
     internal void MoveMouse(Vector2 mousePos)
     {
         mousePos = Vector2.Clamp(mousePos, new Vector2(0, 0), CurScreenSize.ToVector2());
-        // lastControlledMousePosition = mousePos;
-        // mouseControlled = true;
 
         var mx = (int)MathF.Round(mousePos.X);
         var my = (int)MathF.Round(mousePos.Y);
         Raylib.SetMousePosition(mx, my);
     }
+    
     /// <summary>
     /// Closes the window. (Not implemented)
     /// </summary>
@@ -598,6 +783,8 @@ public sealed class GameWindow
     /// <returns>True if the window was restored; otherwise, false.</returns>
     public bool RestoreWindow()
     {
+        bool applyFix =  DisplayState == WindowDisplayState.BorderlessFullscreen || DisplayState == WindowDisplayState.Fullscreen;
+        
         if (DisplayState == WindowDisplayState.Minimized)
         {
             Raylib.ClearWindowState(ConfigFlags.MinimizedWindow);
@@ -606,19 +793,28 @@ public sealed class GameWindow
         {
             Raylib.ClearWindowState(ConfigFlags.MaximizedWindow);
         }
-        else if (DisplayState == WindowDisplayState.Fullscreen || DisplayState == WindowDisplayState.BorderlessFullscreen)
+        else if (DisplayState == WindowDisplayState.Fullscreen)
         {
             Raylib.ClearWindowState(ConfigFlags.FullscreenMode);
         }
-
-        Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
-        Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
+        else if(DisplayState == WindowDisplayState.BorderlessFullscreen)
+        {
+            Raylib.ClearWindowState(ConfigFlags.BorderlessWindowMode);
+        }
 
         DisplayState = WindowDisplayState.Normal;
 
         ResetMousePosition();
+
+        // This is a fix for windows that are moved between monitors after restoring the window from a fullscreen mode
+        if (applyFix)
+        {
+            ApplyMacOSFullscreenFix();
+        }
+
         return false;
     }
+ 
     /// <summary>
     /// Centers the window on the current monitor.
     /// </summary>
@@ -632,27 +828,27 @@ public sealed class GameWindow
         Raylib.SetWindowPosition(winPosX + (int)monitor.Position.X, winPosY + (int)monitor.Position.Y);
         ResetMousePosition();
     }
+    
     /// <summary>
     /// Resizes the window to the specified dimensions.
     /// </summary>
     /// <param name="newDimensions">The new dimensions for the window.</param>
     public void ResizeWindow(Dimensions newDimensions) => WindowSize = newDimensions;
+    
     /// <summary>
     /// Resets the window to its default size and position.
     /// </summary>
     public void ResetWindow()
     {
         RestoreWindow();
-        WindowSize = Monitor.CurMonitor().Dimensions / 2;
+        WindowSize = GetCurrentMonitorDimensions() / 2; // Monitor.CurMonitor().Dimensions / 2;
     }
 
     /// <summary>
-    /// Activates fullscreen mode with the specified resolution.
+    /// Activates fullscreen mode.
     /// </summary>
-    /// <param name="width">The width for fullscreen.</param>
-    /// <param name="height">The height for fullscreen.</param>
     /// <returns>True if fullscreen was activated; otherwise, false.</returns>
-    public bool ActivateFullscreen(int width, int height)
+    public bool ActivateFullscreen()
     {
         if (DisplayState == WindowDisplayState.Fullscreen) return false;
 
@@ -665,9 +861,9 @@ public sealed class GameWindow
         {
             if (DisplayState == WindowDisplayState.BorderlessFullscreen)
             {
-                Raylib.ClearWindowState(ConfigFlags.FullscreenMode);
-                Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
-                Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
+                Raylib.ClearWindowState(ConfigFlags.BorderlessWindowMode);
+                // Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
+                // Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
             }
             else if (DisplayState == WindowDisplayState.Maximized)
             {
@@ -681,19 +877,23 @@ public sealed class GameWindow
         }
 
         DisplayState = WindowDisplayState.Fullscreen;
-
-        prevFullscreenResolution = new(width, height);
-
-        Raylib.SetWindowSize(width, height);
+        
         Raylib.SetWindowState(ConfigFlags.FullscreenMode);
-        // CalculateCurScreenSize();
+        
         ResetMousePosition();
+        
         return true;
     }
+    
     /// <summary>
     /// Activates borderless fullscreen mode.
     /// </summary>
     /// <returns>True if borderless fullscreen was activated; otherwise, false.</returns>
+    /// <remarks>
+    /// <see cref="FullscreenAutoRestoring"/> does not affect borderless fullscreen!
+    /// Prefer <see cref="ToggleFullscreen"/> or <see cref="ActivateFullscreen"/> over borderless fullscreen.
+    /// Since raylib 6.0 there is not much difference between Fullscreen and Borderless Fullscreen anymore.
+    /// </remarks>
     public bool ActivateBorderlessFullscreen()
     {
         if (DisplayState == WindowDisplayState.BorderlessFullscreen) return false;
@@ -707,10 +907,10 @@ public sealed class GameWindow
         {
             if (DisplayState == WindowDisplayState.Fullscreen)
             {
-                prevFullscreenResolution = new(-1, -1);
                 Raylib.ClearWindowState(ConfigFlags.FullscreenMode);
-                Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
-                Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
+                ApplyMacOSFullscreenFix();
+                // Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
+                // Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
             }
             else if (DisplayState == WindowDisplayState.Maximized)
             {
@@ -724,14 +924,12 @@ public sealed class GameWindow
 
         DisplayState = WindowDisplayState.BorderlessFullscreen;
 
-        var mDim = Monitor.CurMonitor().Dimensions;
-        var dpi = Raylib.GetWindowScaleDPI();
-        Raylib.SetWindowSize(mDim.Width * (int)dpi.X, mDim.Height * (int)dpi.Y);
-        Raylib.SetWindowState(ConfigFlags.FullscreenMode);
-
+        Raylib.SetWindowState(ConfigFlags.BorderlessWindowMode);
+        
         ResetMousePosition();
         return true;
     }
+    
     /// <summary>
     /// Minimizes the window.
     /// </summary>
@@ -742,16 +940,23 @@ public sealed class GameWindow
 
         if (DisplayState == WindowDisplayState.Normal)
         {
-            prevDisplayStateWindowDimensions = CurScreenSize;
-            prevDisplayStateWindowPosition = Raylib.GetWindowPosition();
+            // prevDisplayStateWindowDimensions = CurScreenSize;
+            // prevDisplayStateWindowPosition = Raylib.GetWindowPosition();
         }
 
-        if (DisplayState == WindowDisplayState.Fullscreen || DisplayState == WindowDisplayState.BorderlessFullscreen)
+        if (DisplayState == WindowDisplayState.Fullscreen)
         {
-            prevFullscreenResolution = new(-1, -1);
             Raylib.ClearWindowState(ConfigFlags.FullscreenMode);
-            Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
-            Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
+            ApplyMacOSFullscreenFix();
+            // Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
+            // Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
+        }
+        else if (DisplayState == WindowDisplayState.BorderlessFullscreen)
+        {
+            Raylib.ClearWindowState(ConfigFlags.BorderlessWindowMode);
+            ApplyMacOSFullscreenFix();
+            // Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
+            // Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
         }
         else if (DisplayState == WindowDisplayState.Maximized)
         {
@@ -763,6 +968,7 @@ public sealed class GameWindow
 
         return true;
     }
+    
     /// <summary>
     /// Maximizes the window.
     /// </summary>
@@ -773,17 +979,24 @@ public sealed class GameWindow
 
         if (DisplayState == WindowDisplayState.Normal)
         {
-            prevDisplayStateWindowDimensions = CurScreenSize;
-            prevDisplayStateWindowPosition = Raylib.GetWindowPosition();
+            // prevDisplayStateWindowDimensions = CurScreenSize;
+            // prevDisplayStateWindowPosition = Raylib.GetWindowPosition();
         }
 
-        if (DisplayState == WindowDisplayState.Fullscreen || DisplayState == WindowDisplayState.BorderlessFullscreen)
+        if (DisplayState == WindowDisplayState.Fullscreen)
         {
-            prevFullscreenResolution = new(-1, -1);
             Raylib.ClearWindowState(ConfigFlags.FullscreenMode);
-            Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
-            Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
+            ApplyMacOSFullscreenFix();
+            // Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
+            // Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
 
+        }
+        else if (DisplayState == WindowDisplayState.BorderlessFullscreen)
+        {
+            Raylib.ClearWindowState(ConfigFlags.BorderlessWindowMode);
+            ApplyMacOSFullscreenFix();
+            // Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
+            // Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
         }
         else if (DisplayState == WindowDisplayState.Minimized)
         {
@@ -796,9 +1009,15 @@ public sealed class GameWindow
         ResetMousePosition();
         return true;
     }
+    
     /// <summary>
     /// Toggles borderless fullscreen mode.
     /// </summary>
+    /// <remarks>
+    /// <see cref="FullscreenAutoRestoring"/> does not affect borderless fullscreen!
+    /// Prefer <see cref="ToggleFullscreen"/> or <see cref="ActivateFullscreen"/> over borderless fullscreen.
+    /// Since raylib 6.0 there is not much difference between Fullscreen and Borderless Fullscreen anymore.
+    /// </remarks>
     public void ToggleBorderlessFullscreen()
     {
         if (DisplayState == WindowDisplayState.BorderlessFullscreen)
@@ -810,6 +1029,22 @@ public sealed class GameWindow
             ActivateBorderlessFullscreen();
         }
     }
+    
+    /// <summary>
+    /// Toggles fullscreen mode.
+    /// </summary>
+    public void ToggleFullscreen()
+    {
+        if (DisplayState == WindowDisplayState.Fullscreen)
+        {
+            RestoreWindow();
+        }
+        else
+        {
+            ActivateFullscreen();
+        }
+    }
+    
     /// <summary>
     /// Toggles maximized state of the window.
     /// </summary>
@@ -824,6 +1059,7 @@ public sealed class GameWindow
             MaximizeWindow();
         }
     }
+    
     /// <summary>
     /// Toggles minimized state of the window.
     /// </summary>
@@ -858,6 +1094,7 @@ public sealed class GameWindow
         WindowBorder = WindowBorder.Fixed;
         return true;
     }
+    
     /// <summary>
     /// Sets the window border to resizable.
     /// </summary>
@@ -875,6 +1112,7 @@ public sealed class GameWindow
         WindowBorder = WindowBorder.Resizabled;
         return true;
     }
+    
     /// <summary>
     /// Sets the window border to undecorated (no border).
     /// </summary>
@@ -910,18 +1148,22 @@ public sealed class GameWindow
     /// Returns whether the window is in borderless fullscreen mode.
     /// </summary>
     public bool IsWindowBorderlessFullscreen() => DisplayState == WindowDisplayState.BorderlessFullscreen;
+    
     /// <summary>
     /// Returns whether the window is in fullscreen mode.
     /// </summary>
     public bool IsWindowFullscreen() => DisplayState == WindowDisplayState.Fullscreen;
+    
     /// <summary>
     /// Returns whether the window is maximized.
     /// </summary>
     public bool IsWindowMaximized() => DisplayState == WindowDisplayState.Maximized;
+    
     /// <summary>
     /// Returns whether the window is minimized.
     /// </summary>
     public bool IsWindowMinimized() => DisplayState == WindowDisplayState.Minimized;
+    
     /// <summary>
     /// Returns whether the window is in normal state.
     /// </summary>
@@ -931,6 +1173,7 @@ public sealed class GameWindow
     /// Gets whether the window is currently focused.
     /// </summary>
     public bool IsWindowFocused => Raylib.IsWindowFocused();
+    
     /// <summary>
     /// Gets whether the window is currently topmost.
     /// </summary>
@@ -942,8 +1185,13 @@ public sealed class GameWindow
     /// <returns>A value between 0 and 1 representing the visible area.</returns>
     public float GetScreenPercentage()
     {
-        var screenSize = Monitor.CurMonitor().Dimensions.ToSize();
-        var screenRect = new Rect(new(0f), screenSize, new(0f));
+        // Get current monitor info to get both dimensions AND position
+        var monitor = Monitor.CurMonitor();
+        // var screenSize = monitor.Dimensions.ToSize();
+        var screenSize = GetCurrentMonitorDimensions().ToSize();
+        
+        // FIXED: Use monitor's actual position, not (0,0), to work on non-primary monitors
+        var screenRect = new Rect(monitor.Position, screenSize, new(0f));
 
         var wSize = CurScreenSize.ToSize();
         var windowPos = Raylib.GetWindowPosition();
@@ -951,6 +1199,7 @@ public sealed class GameWindow
         float p = CalculateScreenPercentage(screenRect, windowRect);
         return p;
     }
+    
     /// <summary>
     /// Reports how much of the window area is shown on the screen. 0 means window is not on the screen, 1 means whole window is on screen.
     /// </summary>
@@ -973,21 +1222,25 @@ public sealed class GameWindow
     /// </summary>
     private void CalculateMonitorConversionFactors()
     {
-        int monitor = Raylib.GetCurrentMonitor();
-        int mw = Raylib.GetMonitorWidth(monitor);
-        int mh = Raylib.GetMonitorHeight(monitor);
-        if (GameDef.Game.IsOSX())
-        {
-             if (IsWindowBorderlessFullscreen() || IsWindowFullscreen())
-             {
-                 mw = (int)(mw / osxWindowScaleDpi.X);
-                 mh = (int)(mh / osxWindowScaleDpi.Y);
-             }
-        }
-
-        var mDim = new Dimensions(mw, mh);
+        var mDim = GetCurrentMonitorDimensions();
         ScreenToMonitor = new DimensionConversionFactors(CurScreenSize, mDim);
         MonitorToScreen = new DimensionConversionFactors(mDim, CurScreenSize);
+    }
+
+    private Dimensions GetCurrentMonitorDimensions()
+    {
+        var mDim = Monitor.CurMonitor().Dimensions;
+        
+        //NOTE -> needed for correct Conversion factor calculations on windows.
+        if (Game.IsWindows())
+        {
+            var dpiScale = Raylib.GetWindowScaleDPI();
+            mDim = new Dimensions(
+                (int)(mDim.Width / dpiScale.X),
+                (int)(mDim.Height / dpiScale.Y)
+            );
+        }
+        return mDim;
     }
     #endregion
 
@@ -1001,55 +1254,21 @@ public sealed class GameWindow
         var monitor = Monitor.CurMonitor();
         WindowSize = monitor.Dimensions / 2;
         WindowPosition = Raylib.GetWindowPosition();
-        // PrevFullscreenDisplayState = new(WindowSize, WindowPosition, DisplayState);
-        // PrevMinimizedDisplayState = new(WindowSize, WindowPosition, DisplayState);
         prevDisplayStateWindowDimensions = WindowSize;
         prevDisplayStateWindowPosition = WindowPosition;
         CalculateCurScreenSize();
     }
+    
     /// <summary>
     /// Calculates the current screen size based on the window state.
     /// </summary>
     private void CalculateCurScreenSize()
     {
-        if(DisplayState == WindowDisplayState.Fullscreen)
-        {
-            // int w = Raylib.GetScreenWidth();
-            // int h = Raylib.GetScreenHeight();
-            // CurScreenSize = new(w, h);
-
-            int w = Raylib.GetRenderWidth();
-            int h = Raylib.GetRenderHeight();
-            CurScreenSize = new(w, h);
-        }
-        else if (DisplayState == WindowDisplayState.BorderlessFullscreen)
-        {
-            int monitor = Raylib.GetCurrentMonitor();
-            int mw = Raylib.GetMonitorWidth(monitor);
-            int mh = Raylib.GetMonitorHeight(monitor);
-            CurScreenSize = new(mw , mh);
-
-
-            // int w = Raylib.GetRenderWidth();
-            // int h = Raylib.GetRenderHeight();
-            // CurScreenSize = new(w, h);
-
-            // var scaleFactor = Game.IsOSX() ? Raylib.GetWindowScaleDPI() : new Vector2(1f, 1f);
-            // // var scaleX = (int)scaleFactor.X;
-            // // var scaleY = (int)scaleFactor.Y;
-            // CurScreenSize = new(mw / scaleFactor.X , mh / scaleFactor.Y );
-        }
-        else
-        {
-            // var scaleFactor = Raylib.GetWindowScaleDPI();
-            // int scaleX = (int)scaleFactor.X;
-            // int scaleY = (int)scaleFactor.Y;
-
-            int w = Raylib.GetScreenWidth();
-            int h = Raylib.GetScreenHeight();
-            CurScreenSize = new(w, h);
-        }
+        int w = Raylib.GetScreenWidth();
+        int h = Raylib.GetScreenHeight();
+        CurScreenSize = new(w, h);
     }
+    
     /// <summary>
     /// Checks for changes in window configuration flags and raises events.
     /// </summary>
@@ -1073,34 +1292,9 @@ public sealed class GameWindow
         if (cur.HasFocusedChanged(windowConfigFlags))
         {
             OnWindowFocusChanged?.Invoke(cur.Focused);
-            if (FullscreenAutoRestoring)
-            {
-                if (!cur.Focused)
-                {
-                    if (DisplayState == WindowDisplayState.BorderlessFullscreen || DisplayState == WindowDisplayState.Fullscreen)
-                    {
-                        wasFullscreen = true;
-                        if (DisplayState == WindowDisplayState.BorderlessFullscreen) prevFullscreenResolution = new(-1, -1);
-                        RestoreWindow();
-                    }
-                }
-                else
-                {
-                    if (wasFullscreen)
-                    {
-                        if (prevFullscreenResolution.Positive)
-                        {
-                            ActivateFullscreen((int)prevFullscreenResolution.Width, (int)prevFullscreenResolution.Height);
-                        }
-                        else
-                        {
-                            ActivateBorderlessFullscreen();
-                        }
-                        wasFullscreen = false;
-                    }   
-                }
-            }
-
+            
+            HandleFullscreenAutoRestoring(cur.Focused);
+            // HandleFullscreenBorderlessAutoRestoring(cur.Focused);
         }
         if (cur.HasAlwaysRunChanged(windowConfigFlags))
         {
@@ -1111,10 +1305,6 @@ public sealed class GameWindow
             OnWindowMousePassThroughChanged?.Invoke(cur.MousePassThrough);
         }
 
-        if (cur.HasVSyncChanged(windowConfigFlags))
-        {
-            OnWindowVSyncChanged?.Invoke(cur.VSync);
-        }
         if (cur.HasFullscreenChanged(windowConfigFlags))
         {
             OnWindowFullscreenChanged?.Invoke(cur.Fullscreen);
@@ -1155,6 +1345,7 @@ public sealed class GameWindow
 
         windowConfigFlags = cur;
     }
+    
     /// <summary>
     /// Checks for changes in window size and position and raises events.
     /// </summary>
@@ -1162,9 +1353,13 @@ public sealed class GameWindow
     {
         var prev = CurScreenSize;
         CalculateCurScreenSize();
+        
         if (prev != CurScreenSize)
         {
-            if (DisplayState == WindowDisplayState.Normal) windowSize = CurScreenSize;
+            if (DisplayState == WindowDisplayState.Normal)
+            {
+                windowSize = CurScreenSize;
+            }
             var conversion = new DimensionConversionFactors(prev, CurScreenSize);
             OnWindowSizeChanged?.Invoke(conversion);
         }
@@ -1176,64 +1371,173 @@ public sealed class GameWindow
             OnWindowPositionChanged?.Invoke(WindowPosition, curWindowPosition);
         }
     }
+  
     /// <summary>
     /// Checks for changes in cursor state and raises events.
     /// </summary>
     private void CheckForCursorChanges()
     {
-
-        MouseOnScreen = Raylib.IsCursorOnScreen() || (Raylib.IsWindowFocused() && ScreenArea.ContainsPoint(MousePosition));
-
-        var curCursorState = GetCurCursorState();
-
-        if (!MouseOnScreen || Raylib.IsWindowState(ConfigFlags.MinimizedWindow))//fullscreen to minimize fix for enabling/showing os cursor
+        // Determine current window state
+        bool isWindowFocused = Raylib.IsWindowFocused();
+        bool wasMinimized = Raylib.IsWindowState(ConfigFlags.MinimizedWindow);
+        
+        // Determine current mouse on screen state
+        // Mouse is only "on screen" if cursor is within window bounds AND window is focused
+        // Use ONLY Raylib.IsCursorOnScreen() - don't fallback to ScreenArea check because
+        // MousePosition can get clamped at window edges on Windows, causing false positives
+        
+        //On MacOS on launching the app, Raylib.IsCursorOnScreen() returns false even when the mouse is on the screen,
+        //so we need to check the mouse position against the screen area as a fallback.
+        bool containsScreenCursor = Game.IsOSX() ? ScreenArea.ContainsPoint(Raylib.GetMousePosition()) : false;
+        bool isCursorOnScreen = Raylib.IsCursorOnScreen() || containsScreenCursor;
+        bool currentMouseOnScreen = isWindowFocused && isCursorOnScreen;
+        
+        // Update MouseOnScreen property and cursor state
+        MouseOnScreen = currentMouseOnScreen;
+        cursorState = cursorState.WithOnScreen(currentMouseOnScreen);
+        
+        // Handle mouse leaving/entering screen transitions
+        if (!currentMouseOnScreen || wasMinimized || !isWindowFocused)
         {
-            if (cursorState.OnScreen)//prev state
+            // Mouse is off screen, window is minimized, or window is not focused
+            if (previousCursorState.OnScreen) // Was on screen previously
             {
+                // Fire event and force cursor to be visible/enabled for OS compatibility
                 OnMouseLeftScreen?.Invoke();
-                if (wasMouseVisible == null) wasMouseVisible = cursorState.Visible;
-                if (wasMouseEnabled == null) wasMouseEnabled = cursorState.Enabled;
-
-                if (!mouseEnabled)
-                {
-                    Raylib.EnableCursor();
-                    mouseEnabled = true;
-                }
-
-                if (!mouseEnabled)
-                {
-                    Raylib.ShowCursor();
-                    mouseVisible = true;
-                }
+                ForceShowAndEnableCursor();
+            }
+            // When window is not focused, always ensure cursor is visible/enabled for OS control
+            else if (!isWindowFocused && (cursorState.Visible != true || cursorState.Enabled != true))
+            {
+                ForceShowAndEnableCursor();
             }
         }
         else
         {
-            if (!cursorState.OnScreen) //prev state
+            // Mouse is on screen, window is focused and not minimized
+            if (!previousCursorState.OnScreen) // Was off screen previously
             {
+                // Fire event and restore desired cursor state
                 OnMouseEnteredScreen?.Invoke();
-                if (wasMouseVisible != null) MouseVisible = (bool)wasMouseVisible;
-                if (wasMouseEnabled != null) MouseEnabled = (bool)wasMouseEnabled;
-                // if (wasMouseVisible != null && wasMouseVisible == false) MouseVisible = false;
-                // if (wasMouseEnabled != null && wasMouseEnabled == false) MouseEnabled = false;
-
-                wasMouseVisible = null;
-                wasMouseEnabled = null;
+                RestoreDesiredCursorState();
+            }
+            else
+            {
+                // Mouse stayed on screen - validate and apply any pending state changes
+                ValidateAndSyncCursorState();
+                
+                // Ensure desired state is applied (handles case where user changed properties while on screen)
+                if (cursorState.Enabled != cursorState.DesiredEnabled)
+                {
+                    ApplyMouseEnabledToRaylib(cursorState.DesiredEnabled);
+                }
+                
+                if (cursorState.Visible != cursorState.DesiredVisible)
+                {
+                    ApplyMouseVisibilityToRaylib(cursorState.DesiredVisible);
+                }
             }
         }
-
-        if (MouseOnScreen)
+        
+        // Fire events for state changes (only when mouse is on screen and window is focused)
+        if (currentMouseOnScreen && !wasMinimized && isWindowFocused)
         {
-            if (curCursorState.Visible && !cursorState.Visible) OnMouseVisibilityChanged?.Invoke(false);
-            else if (!curCursorState.Visible && cursorState.Visible) OnMouseVisibilityChanged?.Invoke(true);
-
-            if (curCursorState.Enabled && !cursorState.Enabled) OnMouseEnabledChanged?.Invoke(false);
-            else if (!curCursorState.Enabled && cursorState.Enabled) OnMouseEnabledChanged?.Invoke(true);
+            // Check for visibility changes
+            if (cursorState.Visible != previousCursorState.Visible)
+            {
+                OnMouseVisibilityChanged?.Invoke(cursorState.Visible);
+            }
+            
+            // Check for enabled state changes
+            if (cursorState.Enabled != previousCursorState.Enabled)
+            {
+                OnMouseEnabledChanged?.Invoke(cursorState.Enabled);
+            }
         }
-
-        cursorState = curCursorState;
+        
+        // Update cached cursor state for next frame
+        previousCursorState = cursorState;
+    }
+    
+    private void UpdateWindowAfterMonitorChange(MonitorInfo monitor)
+    {
+        var windowDimensions = windowSize;
+        if (windowDimensions.Width > monitor.Width || windowDimensions.Height > monitor.Height)
+        {
+            windowDimensions = monitor.Dimensions / 2;
+        }
+        
+        windowSize = windowDimensions;
+        prevDisplayStateWindowDimensions = windowDimensions;
     }
 
+    private void HandleFullscreenAutoRestoring(bool focused)
+    {
+        if (!FullscreenAutoRestoring) return;
+
+        if (fullscreenAutoRestoringActive)
+        {
+            if (focused)
+            {
+                if(fullscreenAutoRestoringWindowWasTopmost) Raylib.SetWindowState(ConfigFlags.TopmostWindow);
+                ActivateFullscreen();
+                fullscreenAutoRestoringActive = false;
+            }
+        }
+        else if (DisplayState == WindowDisplayState.Fullscreen && !focused)
+        {
+            fullscreenAutoRestoringActive = true;
+            RestoreWindow();
+                        
+            fullscreenAutoRestoringWindowWasTopmost = Raylib.IsWindowState(ConfigFlags.TopmostWindow);
+            Raylib.ClearWindowState(ConfigFlags.TopmostWindow);
+        }
+    }
+
+    // private void HandleFullscreenBorderlessAutoRestoring(bool focused)
+    // {
+    //     if (!BorderlessFullscreenAutoRestoring) return;
+    //
+    //     if (borderlessFullscreenAutoRestoringActive)
+    //     {
+    //         if (focused)
+    //         {
+    //             if(borderlessFullscreenAutoRestoringWindowWasTopmost) Raylib.SetWindowState(ConfigFlags.TopmostWindow);
+    //             ActivateBorderlessFullscreen();
+    //             borderlessFullscreenAutoRestoringActive = false;
+    //             borderlessFullscreenAutoRestoringActiveCooldown = false;
+    //         }
+    //     }
+    //     else if (DisplayState == WindowDisplayState.BorderlessFullscreen && !focused)
+    //     {
+    //         borderlessFullscreenAutoRestoringActive = true;
+    //         RestoreWindow();
+    //                     
+    //         borderlessFullscreenAutoRestoringWindowWasTopmost = Raylib.IsWindowState(ConfigFlags.TopmostWindow);
+    //         Raylib.ClearWindowState(ConfigFlags.TopmostWindow);
+    //     }
+    // }
+    
+    private void ApplyMacOSFullscreenFix()
+    {
+        //when entering any fullscreen mode on macOS,
+        //exiting fullscreen and then dragging the window to another monitor will increase the window size to the monitors size
+        //this fixes the issue
+        
+        if (!Game.IsOSX()) return;
+        if(Monitor.MonitorCount() <= 1) return;
+        
+        var currentMonitorIndex = Monitor.GetCurIndex();
+        foreach (var monitorInfo in Monitor.GetAllMonitorInfo())
+        {
+            if(monitorInfo.Index == currentMonitorIndex) continue;
+            Raylib.SetWindowMonitor(monitorInfo.Index);
+        }
+        Raylib.SetWindowMonitor(currentMonitorIndex);
+
+        Raylib.SetWindowSize(prevDisplayStateWindowDimensions.Width, prevDisplayStateWindowDimensions.Height);
+        Raylib.SetWindowPosition((int)prevDisplayStateWindowPosition.X, (int)prevDisplayStateWindowPosition.Y);
+    }
     #endregion
 
     #region Monitor
@@ -1253,6 +1557,7 @@ public sealed class GameWindow
         }
         return false;
     }
+    
     /// <summary>
     /// Switches to the next available monitor.
     /// </summary>
@@ -1264,18 +1569,25 @@ public sealed class GameWindow
             ChangeMonitor(nextMonitor);
         }
     }
+   
     /// <summary>
     /// Changes the window to use the specified monitor info.
     /// </summary>
     /// <param name="monitor">The monitor info to switch to.</param>
     private void ChangeMonitor(MonitorInfo monitor)
     {
+        bool activateBorderless = false;
+        bool activateFullscreen = false;
+        
         if (DisplayState == WindowDisplayState.Fullscreen)
         {
-            Raylib.SetWindowMonitor(monitor.Index);
-            Raylib.SetWindowSize(monitor.Dimensions.Width, monitor.Dimensions.Height);
-            Raylib.SetWindowPosition((int)monitor.Position.X, (int)monitor.Position.Y);
-            Raylib.SetWindowState(ConfigFlags.FullscreenMode);
+            RestoreWindow();
+            activateFullscreen = true;
+        }
+        else if (DisplayState == WindowDisplayState.BorderlessFullscreen)
+        {
+            RestoreWindow();
+            activateBorderless = true;
         }
 
         var windowDimensions = windowSize;
@@ -1286,28 +1598,65 @@ public sealed class GameWindow
 
         windowSize = windowDimensions;
 
-        int winPosX = monitor.Width / 2 - windowDimensions.Width / 2;
-        int winPosY = monitor.Height / 2 - windowDimensions.Height / 2;
-        int x = winPosX + (int)monitor.Position.X;
-        int y = winPosY + (int)monitor.Position.Y;
-
-        // PrevFullscreenDisplayState = new(windowDimensions, new(x, y), WindowDisplayState.Normal);
-        // PrevMinimizedDisplayState = new(windowDimensions, new(x, y), WindowDisplayState.Normal);
-        prevDisplayStateWindowDimensions = windowDimensions;
-        prevDisplayStateWindowPosition = new(x, y);
-        // prevDisplayStateChangeWindowSize = windowDimensions;
-        // prevDisplayStateChangeDisplayState = WindowDisplayState.Normal;
-        // prevDisplayStateChangeWindowPosition =new(x, y);
-
-        if (DisplayState != WindowDisplayState.Fullscreen)
+        if (Game.IsOSX())
         {
+            Raylib.SetWindowMonitor(monitor.Index);
+            
+            int winPosX = monitor.Width / 2 - windowDimensions.Width / 2;
+            int winPosY = monitor.Height / 2 - windowDimensions.Height / 2;
+            int x = winPosX + (int)monitor.Position.X;
+            int y = winPosY + (int)monitor.Position.Y;
+            
+            prevDisplayStateWindowDimensions = windowDimensions;
+            prevDisplayStateWindowPosition = new(x, y);
+            
+            CurScreenSize = new(windowDimensions.Width, windowDimensions.Height);
+            
             Raylib.SetWindowPosition(x, y);
             Raylib.SetWindowSize(windowDimensions.Width, windowDimensions.Height);
         }
-
+        else
+        {
+            Raylib.SetWindowMonitor(monitor.Index);
+            
+            var w = Raylib.GetScreenWidth();
+            var h = Raylib.GetScreenHeight();
+            
+            var dpiScale = Raylib.GetWindowScaleDPI();
+            
+            //NOTE -> if this turns out to be wrong and dpi scale should not be applied here,
+            //windowDimensions in center position calculation still need to be scaled by dpi scale! (see below)
+            windowDimensions = new(w * dpiScale.X, h * dpiScale.Y);
+            
+            //NOTE -> window dimensions need to be scaled by dpi scale to properly center the window
+            int winPosX = monitor.Width / 2 - windowDimensions.Width / 2;
+            int winPosY = monitor.Height / 2 - windowDimensions.Height / 2;
+            int x = winPosX + (int)monitor.Position.X;
+            int y = winPosY + (int)monitor.Position.Y;
+            
+            // Apply the centered position and size
+            Raylib.SetWindowPosition(x, y);
+            
+            // Update internal state
+            prevDisplayStateWindowDimensions = windowDimensions;
+            prevDisplayStateWindowPosition = new(x, y);
+            CurScreenSize = windowDimensions;
+            windowSize = windowDimensions;
+        }
+        
         ResetMousePosition();
         OnMonitorChanged?.Invoke(monitor);
+
+        if (activateBorderless)
+        {
+            ActivateBorderlessFullscreen();
+        }
+        else if (activateFullscreen)
+        {
+            ActivateFullscreen();
+        }
     }
+    
     #endregion
 
     #region Mouse
@@ -1325,10 +1674,12 @@ public sealed class GameWindow
     /// Gets the mouse movement delta since the last frame.
     /// </summary>
     public Vector2 MouseDelta => Raylib.GetMouseDelta();
+   
     /// <summary>
     /// Gets the X coordinate of the mouse position.
     /// </summary>
     public float MouseX => MousePosition.X;
+    
     /// <summary>
     /// Gets the Y coordinate of the mouse position.
     /// </summary>
@@ -1339,62 +1690,145 @@ public sealed class GameWindow
     /// </summary>
     public bool MouseEnabled
     {
-        get => mouseEnabled;
+        get => cursorState.DesiredEnabled;
         set
         {
-
-            if (!MouseOnScreen)
+            if (value == cursorState.DesiredEnabled) return;
+            cursorState = cursorState.WithDesiredEnabled(value);
+            
+            // Apply immediately if mouse is on screen, otherwise will apply when mouse returns
+            if (cursorState.OnScreen)
             {
-                wasMouseEnabled = value;
-                return;
+                ApplyMouseEnabledToRaylib(value);
             }
-
-            if (value == mouseEnabled) return;
-            mouseEnabled = value;
-            if(mouseEnabled)Raylib.EnableCursor();
-            else Raylib.DisableCursor();
         }
     }
-    private bool mouseEnabled = true;
-    private bool mouseVisible = true;
     
     /// <summary>
     /// Gets or sets whether the mouse cursor is visible.
     /// </summary>
     public bool MouseVisible
     {
-        get => mouseVisible;
+        get => cursorState.DesiredVisible;
         set
         {
-            if (!MouseOnScreen)
+            if (value == cursorState.DesiredVisible) return;
+            cursorState = cursorState.WithDesiredVisible(value);
+            
+            // Apply immediately if mouse is on screen, otherwise will apply when mouse returns
+            if (cursorState.OnScreen)
             {
-                wasMouseVisible = value;
-                return;
+                ApplyMouseVisibilityToRaylib(value);
             }
-
-            if (value == mouseVisible) return;
-            mouseVisible = value;
-            if(value) Raylib.ShowCursor();
-            else Raylib.HideCursor();
         }
     }
 
     /// <summary>
     /// Resets the mouse position to the center of the window.
     /// </summary>
+    /// <remarks>
+    /// On Windows, setting mouse position when cursor is disabled or window is not focused
+    /// can cause the OS cursor to get stuck. This method includes guards to prevent that.
+    /// </remarks>
     public void ResetMousePosition()
     {
-        var center = WindowPosition / 2 + WindowSize.ToVector2() / 2; // CurScreenSize.ToVector2() / 2;
+        // Don't reset position if window is not focused - this can cause cursor to get stuck on Windows
+        if (!Raylib.IsWindowFocused()) return;
+        
+        // Don't reset position if cursor is currently disabled - this can cause cursor to lock on Windows
+        // Check both our internal state and Raylib state for safety
+        if (!cursorState.Enabled || Raylib.IsCursorHidden()) return;
+        
+        var center = WindowPosition / 2 + WindowSize.ToVector2() / 2;
         Raylib.SetMousePosition((int)center.X, (int)center.Y);
     }
 
     /// <summary>
-    /// Gets the current cursor state.
+    /// Applies mouse visibility state to Raylib only if it differs from current Raylib state.
     /// </summary>
-    /// <returns>The current <see cref="CursorState"/>.</returns>
-    private CursorState GetCurCursorState()
+    /// <param name="visible">Whether the cursor should be visible.</param>
+    private void ApplyMouseVisibilityToRaylib(bool visible)
     {
-        return new(MouseVisible, MouseEnabled, MouseOnScreen);
+        bool raylibCursorHidden = Raylib.IsCursorHidden();
+        if (visible && raylibCursorHidden)
+        {
+            Raylib.ShowCursor();
+            cursorState = cursorState.WithVisible(true);
+        }
+        else if (!visible && !raylibCursorHidden)
+        {
+            Raylib.HideCursor();
+            cursorState = cursorState.WithVisible(false);
+        }
+        else
+        {
+            // Already in correct state - just sync our state
+            cursorState = cursorState.WithVisible(visible);
+        }
     }
+    
+    /// <summary>
+    /// Applies mouse enabled state to Raylib.
+    /// Note -> Raylib doesn't provide a way to query cursor enabled state, so we track it ourselves.
+    /// </summary>
+    /// <param name="enabled">Whether the cursor should be enabled.</param>
+    private void ApplyMouseEnabledToRaylib(bool enabled)
+    {
+        if (enabled && !cursorState.Enabled)
+        {
+            Raylib.EnableCursor();
+            cursorState = cursorState.WithEnabled(true);
+        }
+        else if (!enabled && cursorState.Enabled)
+        {
+            Raylib.DisableCursor();
+            cursorState = cursorState.WithEnabled(false);
+        }
+    }
+    
+    /// <summary>
+    /// Forces cursor to be visible and enabled (used when mouse leaves screen or window loses focus).
+    /// </summary>
+    private void ForceShowAndEnableCursor()
+    {
+        if (!cursorState.Enabled)
+        {
+            Raylib.EnableCursor();
+            cursorState = cursorState.WithEnabled(true);
+        }
+        
+        if (!cursorState.Visible)
+        {
+            Raylib.ShowCursor();
+            cursorState = cursorState.WithVisible(true);
+        }
+    }
+    
+    /// <summary>
+    /// Restores cursor to desired state (used when mouse returns to screen).
+    /// </summary>
+    private void RestoreDesiredCursorState()
+    {
+        ApplyMouseEnabledToRaylib(cursorState.DesiredEnabled);
+        ApplyMouseVisibilityToRaylib(cursorState.DesiredVisible);
+    }
+    
+    /// <summary>
+    /// Validates and synchronizes cursor state with Raylib.
+    /// Ensures our internal state matches Raylib's actual state.
+    /// </summary>
+    private void ValidateAndSyncCursorState()
+    {
+        // Sync visibility with Raylib's actual state
+        bool raylibCursorHidden = Raylib.IsCursorHidden();
+        bool raylibVisible = !raylibCursorHidden;
+        
+        if (cursorState.Visible != raylibVisible)
+        {
+            // State desync detected - Raylib state is authoritative
+            cursorState = cursorState.WithVisible(raylibVisible);
+        }
+    }
+
     #endregion
 }

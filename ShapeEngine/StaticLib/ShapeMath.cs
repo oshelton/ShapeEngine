@@ -39,6 +39,115 @@ public static class ShapeMath
     /// A small constant value used for floating-point comparisons to account for precision errors (float version).
     /// </summary>
     public const float EpsilonF = 1e-10f;
+
+    /// <summary>
+    /// The radian value equivalent to 360 degrees (one full turn), equal to Tau (2π).
+    /// </summary>
+    public const float Rad360Degrees = Tau;
+    /// <summary>
+    /// The radian value equivalent to 180 degrees (half turn), equal to PI (π).
+    /// </summary>
+    public const float Rad180Degrees = PI;
+    /// <summary>
+    /// The radian value equivalent to 90 degrees (quarter turn), equal to PI * 0.5.
+    /// </summary>
+    public const float Rad90Degrees = PI * 0.5f;
+    /// <summary>
+    /// The radian value equivalent to 45 degrees (eighth turn), equal to PI * 0.25.
+    /// </summary>
+    public const float Rad45Degrees = PI * 0.25f;
+    /// <summary>
+    /// Number of nanoseconds in one second.
+    /// </summary>
+    /// <remarks>
+    /// 1 second = 1,000,000,000 nanoseconds.
+    /// </remarks>
+    public const long  NanoSecondsInOneSecond = 1000L * 1000L * 1000L;
+    /// <summary>
+    /// Number of nanoseconds in one millisecond.
+    /// </summary>
+    /// <remarks>
+    /// 1 millisecond = 1,000,000 nanoseconds.
+    /// </remarks>
+    public const long NanoSecondsInOneMilliSecond = 1000L * 1000L;
+    /// <summary>
+    /// Number of milliseconds in one second.
+    /// </summary>
+    /// <remarks>
+    /// 1 second = 1,000 milliseconds.
+    /// </remarks>
+    public const long MilliSecondsInOneSecond = 1000L;
+    #endregion
+    
+    #region Time
+    
+    /// <summary>
+    /// Converts nanoseconds to seconds.
+    /// </summary>
+    /// <param name="nanoseconds">The number of nanoseconds.</param>
+    /// <returns>The equivalent time in seconds as a <see cref="double"/>.</returns>
+    public static double NanoSecondsToSeconds(long nanoseconds)
+    {
+        return nanoseconds / (double)NanoSecondsInOneSecond;
+    }
+
+    /// <summary>
+    /// Converts seconds to nanoseconds.
+    /// </summary>
+    /// <param name="seconds">The time in seconds.</param>
+    /// <returns>The equivalent time in nanoseconds as a <see cref="long"/>.</returns>
+    /// <remarks>
+    /// Fractional nanoseconds are truncated when casting to <see cref="long"/> and large values may overflow
+    /// </remarks>
+    public static long SecondsToNanoSeconds(double seconds)
+    {
+        return (long)(seconds * NanoSecondsInOneSecond);
+    }
+
+    /// <summary>
+    /// Converts milliseconds to seconds.
+    /// </summary>
+    /// <param name="milliseconds">The number of milliseconds.</param>
+    /// <returns>The equivalent time in seconds as a <see cref="double"/>.</returns>
+    public static double MilliSecondsToSeconds(long milliseconds)
+    {
+        return milliseconds / (double)MilliSecondsInOneSecond;
+    }
+
+    /// <summary>
+    /// Converts seconds to milliseconds.
+    /// </summary>
+    /// <param name="seconds">The time in seconds.</param>
+    /// <returns>The equivalent time in milliseconds as a <see cref="long"/>.</returns>
+    /// <remarks>
+    /// Fractional milliseconds are truncated when casting to <see cref="long"/> and large values may overflow.
+    /// </remarks>
+    public static long SecondsToMilliSeconds(double seconds)
+    {
+        return (long)(seconds * MilliSecondsInOneSecond);
+    }
+
+    /// <summary>
+    /// Converts milliseconds to nanoseconds.
+    /// </summary>
+    /// <param name="milliseconds">The number of milliseconds.</param>
+    /// <returns>The equivalent time in nanoseconds as a <see cref="long"/>.
+    /// This is an exact integer multiplication and may overflow for very large input values.</returns>
+    public static long MilliSecondsToNanoSeconds(long milliseconds)
+    {
+        return milliseconds * NanoSecondsInOneMilliSecond;
+    }
+
+    /// <summary>
+    /// Converts nanoseconds to milliseconds.
+    /// </summary>
+    /// <param name="nanoseconds">The number of nanoseconds.</param>
+    /// <returns>The equivalent time in milliseconds as a <see cref="long"/> (integer division).</returns>
+    public static long NanoSecondsToMilliSeconds(long nanoseconds)
+    {
+        return nanoseconds / NanoSecondsInOneMilliSecond;
+    }
+    
     #endregion
     
     #region Round
@@ -108,9 +217,40 @@ public static class ShapeMath
     /// <returns>The clamped value.</returns>
     public static float Clamp(float value, float min, float max)
     {
+        if (MathF.Abs(min - max) < 0.000001f) return min;
+        if (min > max)
+        {
+            (min, max) = (max, min);
+        }
+        
         if (value < min) return min;
-        else if (value > max) return max;
-        else return value;
+        if (value > max) return max;
+        return value;
+    }
+    
+    /// <summary>
+    /// Clamps a double-precision value to the specified inclusive range.
+    /// </summary>
+    /// <param name="value">The value to clamp.</param>
+    /// <param name="min">The minimum allowed value.</param>
+    /// <param name="max">The maximum allowed value.</param>
+    /// <returns>
+    /// The clamped value:
+    /// returns <paramref name="min"/> if <paramref name="value"/> &lt; <paramref name="min"/>,
+    /// returns <paramref name="max"/> if <paramref name="value"/> &gt; <paramref name="max"/>,
+    /// otherwise returns <paramref name="value"/>.
+    /// </returns>
+    public static double Clamp(double value, double min, double max)
+    {
+        if (Math.Abs(min - max) < 0.000001) return min;
+        if (min > max)
+        {
+            (min, max) = (max, min);
+        }
+        
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
     }
     /// <summary>
     /// Clamps an integer value to a specified range.
@@ -121,9 +261,16 @@ public static class ShapeMath
     /// <returns>The clamped value.</returns>
     public static int Clamp(int value, int min, int max)
     {
+        if (min == max) return min;
+        
+        if (min > max)
+        {
+            (min, max) = (max, min);
+        }
+        
         if (value < min) return min;
-        else if (value > max) return max;
-        else return value;
+        if (value > max) return max;
+        return value;
     }
     /// <summary>
     /// Clamps a byte value to a specified range.
@@ -134,6 +281,13 @@ public static class ShapeMath
     /// <returns>The clamped value.</returns>
     public static byte Clamp(byte value, byte min, byte max)
     {
+        if (min == max) return min;
+        
+        if (min > max)
+        {
+            (min, max) = (max, min);
+        }
+        
         if (value < min) return min;
         if (value > max) return max;
         return value;
@@ -207,6 +361,77 @@ public static class ShapeMath
     /// <returns><c>true</c> if both have the same sign; otherwise, <c>false</c>.</returns>
     public static bool IsSignEqual(float a, float b) => a < 0 && b < 0 || a > 0 && b > 0 || a == 0 && b == 0;
 
+    #endregion
+    
+    #region Double
+    /// <summary>
+    /// Performs linear interpolation between two double values.
+    /// </summary>
+    /// <param name="from">The starting value.</param>
+    /// <param name="to">The target value.</param>
+    /// <param name="f">The interpolation factor (0 to 1).</param>
+    /// <returns>The interpolated value.</returns>
+    public static double LerpDouble(double from, double to, double f) => (1.0 - f) * from + to * f;
+    /// <summary>
+    /// Calculates the normalized interpolation factor for a value between two doubles.
+    /// </summary>
+    /// <param name="from">The starting value.</param>
+    /// <param name="to">The target value.</param>
+    /// <param name="value">The value to evaluate.</param>
+    /// <returns>The normalized interpolation factor.</returns>
+    public static double LerpInverseDouble(double from, double to, double value)
+    {
+        return (value - from) / (to - from);
+    }
+    /// <summary>
+    /// Remaps a value from one double range to another using linear interpolation.
+    /// </summary>
+    /// <param name="value">The value to remap.</param>
+    /// <param name="minOld">The minimum of the old range.</param>
+    /// <param name="maxOld">The maximum of the old range.</param>
+    /// <param name="minNew">The minimum of the new range.</param>
+    /// <param name="maxNew">The maximum of the new range.</param>
+    /// <returns>The remapped value.</returns>
+    public static double RemapDouble(double value, double minOld, double maxOld, double minNew, double maxNew)
+    {
+        return LerpDouble(minNew, maxNew, LerpInverseDouble(minOld, maxOld, value));
+    }
+    
+    /// <summary>
+    /// Performs a framerate-independent interpolation using Math.Pow. More expensive than exponential decay lerp.
+    /// </summary>
+    /// <param name="from">The starting value.</param>
+    /// <param name="to">The target value.</param>
+    /// <param name="remainder">Fraction remaining after 1 second.</param>
+    /// <param name="dt">Delta time in seconds.</param>
+    /// <returns>The interpolated value.</returns>
+    public static double PowLerpDouble(double from, double to, double remainder, double dt) => to + (from - to) * Math.Pow(remainder, dt);
+    
+    /// <summary>
+    /// Performs a framerate-independent exponential decay interpolation (cheaper than PowLerp).
+    /// </summary>
+    /// <param name="from">The starting value.</param>
+    /// <param name="to">The target value.</param>
+    /// <param name="decay">Decay rate (recommended between 1 and 25).</param>
+    /// <param name="dt">Delta time in seconds.</param>
+    /// <returns>The interpolated value.</returns>
+    public static double ExpDecayLerpDoubleComplex(double from, double to, double decay, double dt) => to + (from - to) * Math.Exp(-decay * dt);
+
+    /// <summary>
+    /// Performs a framerate-independent exponential decay interpolation with a normalized fraction.
+    /// </summary>
+    /// <param name="from">The starting value.</param>
+    /// <param name="to">The target value.</param>
+    /// <param name="f">Normalized fraction (0 to 1).</param>
+    /// <param name="dt">Delta time in seconds.</param>
+    /// <returns>The interpolated value.</returns>
+    public static double ExpDecayLerpDouble(double from, double to, double f, double dt)
+    {
+        double decay = LerpDouble(1, 25, f);
+        return ExpDecayLerpDoubleComplex(from, to, decay, dt);
+    }
+
+    
     #endregion
     
     #region Lerp
@@ -464,8 +689,9 @@ public static class ShapeMath
     {
         if (count <= 0) return 0;
         if (index >= count) return index % count;
-        else if (index < 0) return (index % count) + count;
-        else return index;
+        if (index < 0) return ((index % count) + count) % count;
+        
+        return index;
     }
     /// <summary>
     /// Wraps a floating-point value to a specified range [min, max).
@@ -597,7 +823,22 @@ public static class ShapeMath
         else if (dir == 0) dir = 0;
         return dir * amount;
     }
-
+    
+    /// <summary>
+    /// Computes the signed smallest angular difference from angle <paramref name="a0"/> to <paramref name="a1"/> in radians.
+    /// The returned value is the shortest rotation to reach <paramref name="a1"/> from <paramref name="a0"/> (positive = counter-clockwise),
+    /// wrapped to the range [-π, π].
+    /// </summary>
+    /// <param name="a0">Start angle in radians.</param>
+    /// <param name="a1">End angle in radians.</param>
+    /// <returns>Signed angle difference in radians.</returns>
+    public static float AngleDelta(float a0, float a1)
+    {
+        float d = a1 - a0;
+        if (d > MathF.PI) d -= 2f * MathF.PI;
+        if (d < -MathF.PI) d += 2f * MathF.PI;
+        return d;
+    }
     #endregion
 
     #region Coordinates

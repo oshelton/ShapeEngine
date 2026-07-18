@@ -6,21 +6,183 @@ using Examples.PayloadSystem;
 using Examples.Scenes.ExampleScenes.EndlessSpaceExampleSource;
 using Raylib_cs;
 using ShapeEngine.Color;
+using ShapeEngine.Core.GameDef;
 using ShapeEngine.Core.Structs;
 using ShapeEngine.Geometry;
 using ShapeEngine.Geometry.CircleDef;
+using ShapeEngine.Geometry.CollisionSystem;
 using ShapeEngine.Geometry.PolygonDef;
 using ShapeEngine.Geometry.RectDef;
-using ShapeEngine.Geometry.StripedDrawingDef;
 using ShapeEngine.Input;
 using Size = ShapeEngine.Core.Structs.Size;
 using ShapeEngine.Random;
 
-// using Examples.Scenes.ExampleScenes.EndlessSpaceExampleSource;
 namespace Examples.Scenes.ExampleScenes;
 
 public class EndlessSpaceCollision : ExampleScene
 {
+    
+    private class ShockwaveEffect
+    {
+        private Vector2 origin;
+        private float magnitude; // distortion strength
+        private float maxRadius; // maximum ring radius in centered/aspect-corrected space
+        private float bandWidth; // ring thickness / softness
+        private float lifeFalloff; // how quickly the wave fades over its lifetime
+        private bool enabled; // > 0.5 = active, <= 0.5 = ignored
+        private float progress; // 0.0 -> just started, 1.0 -> finished
+        private int index;
+        private ShapeShader shader;
+
+        private float duration;
+        private float timer;
+
+        public bool IsFinished => !enabled;
+
+        public ShockwaveEffect(ShapeShader shader, int index)
+        {
+            this.shader = shader;
+            this.index = index;
+            this.enabled = false;
+            this.progress = 0f;
+            this.origin = Vector2.Zero;
+            this.magnitude = 0f;
+            this.maxRadius = 1f;
+            this.bandWidth = 0.08f;
+            this.lifeFalloff = 1.5f;
+            this.duration = 0f;
+            this.timer = 0f;
+
+            Apply();
+        }
+
+        public void Update(float dt)
+        {
+            if(!enabled) return;
+            
+            timer += dt;
+            if (timer >= duration)
+            {
+                timer = duration;
+                progress = 1f;
+                enabled = false;
+            }
+            else
+            {
+                progress = timer / duration;
+            }
+
+            Apply();
+        }
+
+        public bool Start(Vector2 effectOrigin, float effectDuration, float effectMagnitude, float effectMaxRadius, float effectBandWidth, float effectLifeFalloff)
+        {
+            if(enabled) return false; // already active, can't start
+
+            enabled = true;
+            progress = 0f;
+            origin = effectOrigin;
+            duration = effectDuration;
+            timer = 0f;
+            magnitude = effectMagnitude;
+            maxRadius = effectMaxRadius;
+            bandWidth = effectBandWidth;
+            lifeFalloff = effectLifeFalloff;
+
+            Apply();
+            
+            return true;
+        }
+
+        public void Stop()
+        {
+            if(!enabled) return;
+
+            timer = duration;
+            enabled = false;
+            progress = 1f;
+            
+            Apply();
+        }
+
+        private void Apply()
+        {
+            ShapeShader.SetValueVector4(shader.Shader, $"shockwave{index}", origin.X, origin.Y, progress, magnitude);
+            ShapeShader.SetValueVector4(shader.Shader, $"shockwaveParams{index}", maxRadius, bandWidth, lifeFalloff, enabled ? 1f : 0f);
+        }
+    }
+    
+    private class ShockwaveEffectHandler
+    {
+        private Stack<ShockwaveEffect> availableEffects = new(8);
+        private List<ShockwaveEffect> rentedEffects = new(8);
+        private readonly int count = 8;
+        
+        
+        public ShockwaveEffectHandler(ShapeShader? shader)
+        {
+            if (shader != null)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    var effect = new ShockwaveEffect(shader, i);
+                    availableEffects.Push(effect);
+                }
+            }
+        }
+        
+
+        public void Update(float dt)
+        {
+            for (int i = rentedEffects.Count - 1; i >= 0; i--)
+            {
+                var effect = rentedEffects[i];
+                effect.Update(dt);
+                if (effect.IsFinished)
+                {
+                    rentedEffects.RemoveAt(i);
+                    availableEffects.Push(effect);
+                }
+            }
+        }
+
+        public void Stop()
+        {
+            for (int i = 0; i < rentedEffects.Count; i++)
+            {
+                var effect = rentedEffects[i];
+                effect.Stop();
+                availableEffects.Push(effect);
+            }
+            
+            rentedEffects.Clear();
+        }
+
+        public void Start(Vector2 effectOrigin, float effectDuration, float effectMagnitude, float effectMaxRadius = 1f, float effectBandWidth = 0.08f, float effectLifeFalloff = 1.5f)
+        {
+            var effect = RentEffect();
+
+            if (effect != null)
+            {
+                var started = effect.Start(effectOrigin, effectDuration, effectMagnitude, effectMaxRadius, effectBandWidth, effectLifeFalloff);
+                if(started)
+                {
+                    rentedEffects.Add(effect);
+                }
+                else
+                {
+                    availableEffects.Push(effect);
+                }
+            }
+        }
+
+        private ShockwaveEffect? RentEffect()
+        {
+            if(availableEffects.Count > 0) return availableEffects.Pop();
+            return null;
+        }
+    }
+    
     private class ScreenTextureHandler : CustomScreenTextureHandler
     {
         private readonly float parallaxFactor;
@@ -53,7 +215,7 @@ public class EndlessSpaceCollision : ExampleScene
                 );
         }
 
-        public override (ColorRgba color, bool clear) GetBackgroundClearColor() => (ColorRgba.Clear, true);
+        public override (ColorRgba color, bool clear) GetBackgroundClearColor() => (ColorRgba.Transparent, true);
     }
 
     private List<ScreenTexture> starTextures = new(5);
@@ -80,6 +242,9 @@ public class EndlessSpaceCollision : ExampleScene
     private readonly InputAction iaPayloadCallinDown;
     private readonly InputAction iaPayloadCallinLeft;
     private readonly InputAction iaPayloadCallinRight;
+    private readonly InputAction singleDestructorAction;
+    private readonly InputAction multiDestructorAction;
+    private readonly InputAction gameoverScreenAcceptAction;
     private readonly InputActionTree inputActionTree;
     
     private bool drawDebug = false;
@@ -115,7 +280,11 @@ public class EndlessSpaceCollision : ExampleScene
     private readonly float cellSize;
 
     private bool gameOverScreenActive = false;
+    private readonly BroadphaseSpatialHash spatialHash;
 
+    private readonly ShockwaveEffectHandler shockwaveEffectHandler;
+    
+    
     public EndlessSpaceCollision()
     {
         drawInputDeviceInfo = false;
@@ -126,7 +295,9 @@ public class EndlessSpaceCollision : ExampleScene
 
         DestroyerPosition = universe.Center + Rng.Instance.RandVec2(UniverseSize * 1.25f, UniverseSize * 2f);
 
-        InitCollisionHandler(universe, CollisionRows, CollisionCols);
+        spatialHash = new BroadphaseSpatialHash(universe, CollisionRows, CollisionCols);
+        InitCollisionHandler(spatialHash);
+        
         cellSize = UniverseSize / CollisionRows;
         camera = new();
         follower = new(0, 300, 500);
@@ -174,33 +345,49 @@ public class EndlessSpaceCollision : ExampleScene
         UpdateFollower(camera.BaseSize.Min());
         
         InputActionSettings defaultSettings = new();
-        
+        var modifierKeySetGpReversed = new ModifierKeySet(ModifierKeyOperator.Or, GameloopExamples.ModifierKeyGamepadReversed);
         var toggleDrawKB = new InputTypeKeyboardButton(ShapeKeyboardButton.T);
         var toggleDrawGP = new InputTypeGamepadButton(ShapeGamepadButton.RIGHT_FACE_RIGHT);
         iaDrawDebug = new(defaultSettings,toggleDrawKB, toggleDrawGP);
         
         var callInUpKb = new InputTypeKeyboardButton(ShapeKeyboardButton.UP);
-        var callInUpGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_FACE_UP);
+        var callInUpGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_FACE_UP, 0.05f,  modifierKeySetGpReversed);
         iaPayloadCallinUp = new(defaultSettings,callInUpKb, callInUpGp);
             
         var callInDownKb = new InputTypeKeyboardButton(ShapeKeyboardButton.DOWN);
-        var callInDownGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_FACE_DOWN);
+        var callInDownGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_FACE_DOWN, 0.05f,  modifierKeySetGpReversed);
         iaPayloadCallinDown = new(defaultSettings,callInDownKb, callInDownGp);
         
         var callInLeftKb = new InputTypeKeyboardButton(ShapeKeyboardButton.LEFT);
-        var callInLeftGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_FACE_LEFT);
+        var callInLeftGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_FACE_LEFT, 0.05f,  modifierKeySetGpReversed);
         iaPayloadCallinLeft = new(defaultSettings,callInLeftKb, callInLeftGp);
         
         var callInRightKb = new InputTypeKeyboardButton(ShapeKeyboardButton.RIGHT);
-        var callInRightGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_FACE_RIGHT);
+        var callInRightGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_FACE_RIGHT, 0.05f,  modifierKeySetGpReversed);
         iaPayloadCallinRight = new(defaultSettings,callInRightKb, callInRightGp);
+        
+        var singleDestructorKb = new InputTypeKeyboardButton(ShapeKeyboardButton.Q);
+        var singleDestructorGp = new InputTypeGamepadButton(ShapeGamepadButton.LEFT_TRIGGER_TOP);
+        singleDestructorAction = new(defaultSettings,singleDestructorKb, singleDestructorGp);
+        
+        var multiDestructorKb = new InputTypeKeyboardButton(ShapeKeyboardButton.E);
+        var multiDestructorGp = new InputTypeGamepadButton(ShapeGamepadButton.RIGHT_TRIGGER_TOP);
+        multiDestructorAction = new(defaultSettings,multiDestructorKb, multiDestructorGp);
+        
+        var gameoverScreenAcceptKb1 = new InputTypeKeyboardButton(ShapeKeyboardButton.SPACE);
+        var gameoverScreenAcceptKb2 = new InputTypeKeyboardButton(ShapeKeyboardButton.ENTER);
+        var gameoverScreenAcceptGp = new InputTypeGamepadButton(ShapeGamepadButton.RIGHT_FACE_DOWN);
+        gameoverScreenAcceptAction = new(defaultSettings,gameoverScreenAcceptKb1, gameoverScreenAcceptKb2, gameoverScreenAcceptGp);
         
         inputActionTree = [
             iaDrawDebug,
             iaPayloadCallinUp,
             iaPayloadCallinDown,
             iaPayloadCallinLeft,
-            iaPayloadCallinRight
+            iaPayloadCallinRight,
+            singleDestructorAction,
+            multiDestructorAction,
+            gameoverScreenAcceptAction
         ];
         
         AddAsteroids(AsteroidCount);
@@ -217,6 +404,9 @@ public class EndlessSpaceCollision : ExampleScene
             starTextureHandlers.Add(textureHandler);
             
         }
+        
+        var shader = GameloopExamples.Instance.ExplosionShockwaveShader;
+        shockwaveEffectHandler = new(shader);
     }
 
     
@@ -229,7 +419,8 @@ public class EndlessSpaceCollision : ExampleScene
         {
             var pos = screeninfo.Area.GetRandomPointInside();
             
-            CircleDrawing.DrawCircleFast(pos, Rng.Instance.RandF(1, 5), Colors.Highlight.SetAlpha(alpha));
+            var circle = new Circle(pos, Rng.Instance.RandF(1, 5));
+            circle.DrawFast(Colors.Highlight.SetAlpha(alpha));
         }
     }
 
@@ -273,6 +464,12 @@ public class EndlessSpaceCollision : ExampleScene
         UpdateFollower(camera.BaseSize.Min());
         camera.SetZoom(0.35f);
         follower.SetTarget(ship);
+
+        GameloopExamples.Instance.MouseControlEnabled = false;
+
+
+        var shader = GameloopExamples.Instance.ExplosionShockwaveShader;
+        if (shader != null) shader.Enabled = true;
     }
     protected override void OnDeactivate()
     {
@@ -282,6 +479,14 @@ public class EndlessSpaceCollision : ExampleScene
             GameloopExamples.Instance.RemoveScreenTexture(t);
         }
         GameloopExamples.Instance.ResetCamera();
+        
+        GameloopExamples.Instance.MouseControlEnabled = true;
+        
+        shockwaveEffectHandler.Stop();
+        
+        var shader = GameloopExamples.Instance.ExplosionShockwaveShader;
+        if (shader != null) shader.Enabled = false;
+        
     }
     private void OnColorPaletteChanged()
     {
@@ -332,10 +537,13 @@ public class EndlessSpaceCollision : ExampleScene
 
         AddAsteroids(AsteroidCount);
         
+        shockwaveEffectHandler.Stop();
     }
 
     protected override void OnClose()
     {
+        shockwaveEffectHandler.Stop();
+        
         foreach (var t in starTextures)
         {
             t.Unload();
@@ -352,13 +560,11 @@ public class EndlessSpaceCollision : ExampleScene
     private void AddAsteroid(bool big)
     {
         var pos = GetRandomUniversePosition(2500);
-
-        // var minSize = big ? AsteroidMinSize : AsteroidMinSize / 4f;
         var maxSize = big ? AsteroidMaxSize : AsteroidMaxSize / 4f;
         
-        // var shape = Polygon.Generate(pos, AsteroidPointCount, minSize, maxSize);
-        var shape = Polygon.GenerateRelative(AsteroidPointCount, 0.5f, 1f);
-        if (shape == null) return;
+        Polygon shape = new();
+        if (!Polygon.GenerateRelative(AsteroidPointCount, 0.5f, 1f, shape) || shape.Count < 3) return;
+        
         var a = new AsteroidObstacle(shape, pos, maxSize, big);
         if (!big) a.target = ship;
         asteroids.Add(a);
@@ -366,12 +572,11 @@ public class EndlessSpaceCollision : ExampleScene
     }
     private void AddAsteroid(Vector2 pos, bool big)
     {
-        // var minSize = big ? AsteroidMinSize : AsteroidMinSize / 4f;
         var maxSize = big ? AsteroidMaxSize : AsteroidMaxSize / 4f;
         
-        // var shape = Polygon.Generate(pos, AsteroidPointCount, minSize, maxSize);
-        var shape = Polygon.GenerateRelative(AsteroidPointCount, 0.5f, 1f);
-        if (shape == null) return;
+        Polygon shape = new();
+        if (!Polygon.GenerateRelative(AsteroidPointCount, 0.5f, 1f, shape) || shape.Count < 3) return;
+        
         var a = new AsteroidObstacle(shape, pos, maxSize, big);
         if (!big) a.target = ship;
         asteroids.Add(a);
@@ -393,9 +598,16 @@ public class EndlessSpaceCollision : ExampleScene
     
     protected override void OnHandleInputExample(float dt, Vector2 mousePosGame, Vector2 mousePosGameUi, Vector2 mousePosUI)
     {
+        var gamepad = Input.GamepadManager.LastUsedGamepad;
+        inputActionTree.CurrentGamepad = gamepad;
+        inputActionTree.Update(dt);
+        
         if (gameOverScreenActive)
         {
-            if (ShapeKeyboardButton.SPACE.GetInputState().Pressed)
+            // if (ShapeKeyboardButton.SPACE.GetInputState().Pressed || 
+            //     ShapeKeyboardButton.ENTER.GetInputState().Pressed || 
+            //     (Input.GamepadManager.LastUsedGamepad != null && Input.GamepadManager.LastUsedGamepad.IsDown(ShapeGamepadButton.RIGHT_FACE_DOWN)))
+            if(gameoverScreenAcceptAction.State.Pressed)
             {
                 gameOverScreenActive = false;
                 Reset();
@@ -403,10 +615,6 @@ public class EndlessSpaceCollision : ExampleScene
             
             return;
         }
-        
-        var gamepad = Input.GamepadManager.LastUsedGamepad;
-        inputActionTree.CurrentGamepad = gamepad;
-        inputActionTree.Update(dt);
         
         if (iaDrawDebug.State.Pressed)
         {
@@ -464,64 +672,13 @@ public class EndlessSpaceCollision : ExampleScene
                     pds.ResetSequence();
                 }
             }
-            
-            /*var finished = orbitalStrike.KeyPressed(dir);
-            if (finished)
-            {
-                PayloadMarkerSimple marker = new();
-                var speed = ShapeRandom.RandF(3250, 3750);
-                marker.Launch(ship.GetBarrelPosition(), ship.GetBarrelDirection(), speed, 1f, 1.8f);
-                orbitalStrike.RequestPayload(marker);
-            }
-            else
-            {
-                finished = barrage350mm.KeyPressed(dir);
-                if (finished)
-                {
-                    PayloadMarkerSimple marker = new();
-                    var speed = ShapeRandom.RandF(3250, 3750);
-                    marker.Launch(ship.GetBarrelPosition(), ship.GetBarrelDirection(), speed, 1f, 1.8f);
-                    barrage350mm.RequestPayload(marker);
-                }
-                else
-                {
-                    finished = barrage100mm.KeyPressed(dir);
-                    if (finished)
-                    {
-                        PayloadMarkerSimple marker = new();
-                        var speed = ShapeRandom.RandF(3250, 3750);
-                        marker.Launch(ship.GetBarrelPosition(), ship.GetBarrelDirection(), speed, 1f, 1.8f);
-                        barrage100mm.RequestPayload(marker);
-                    }
-                    else
-                    {
-                        finished = hyperStrafe.KeyPressed(dir);
-                        if (finished)
-                        {
-                            PayloadMarkerSimple marker = new();
-                            var speed = ShapeRandom.RandF(3250, 3750);
-                            marker.Launch(ship.GetBarrelPosition(), ship.GetBarrelDirection(), speed, 1f, 1.8f);
-                            hyperStrafe.RequestPayload(marker);
-                        }
-
-                    }
-                }
-            }
-
-            if (finished)
-            {
-                orbitalStrike.ResetSequence();
-                barrage350mm.ResetSequence();
-                barrage100mm.ResetSequence();
-                hyperStrafe.ResetSequence();
-            }*/
-            
         }
 
         if (CollisionHandler != null)
         {
-            var singleDestructorPressed = singleDestructorBurstsRemaining <= 0 && singleDestructorCooldownTimer <= 0f && (ShapeKeyboardButton.Q.GetInputState().Pressed);
-            var multiDestructorPressed = multiDestructorCooldownTimer <= 0 && (ShapeKeyboardButton.E.GetInputState().Pressed);
+            
+            var singleDestructorPressed = singleDestructorBurstsRemaining <= 0 && singleDestructorCooldownTimer <= 0f && singleDestructorAction.State.Pressed;
+            var multiDestructorPressed = multiDestructorCooldownTimer <= 0 && multiDestructorAction.State.Pressed;
         
             if (singleDestructorPressed)
             {
@@ -544,61 +701,6 @@ public class EndlessSpaceCollision : ExampleScene
             }
         }
         
-
-        /*if ((ShapeKeyboardButton.ONE.GetInputState().Pressed || ShapeKeyboardButton.UP.GetInputState().Pressed) && orbitalStrike.IsReady)
-        {
-            PayloadMarkerSimple marker = new();
-            var speed = ShapeRandom.RandF(3250, 3750);
-            marker.Launch(ship.GetBarrelPosition(), ship.GetBarrelDirection(), speed, 1f, 1.8f);
-            orbitalStrike.RequestPayload(marker);
-        }
-        if ((ShapeKeyboardButton.TWO.GetInputState().Pressed || ShapeKeyboardButton.DOWN.GetInputState().Pressed) && barrage350mm.IsReady)
-        {
-            PayloadMarkerSimple marker = new();
-            var speed = ShapeRandom.RandF(3250, 3750);
-            marker.Launch(ship.GetBarrelPosition(), ship.GetBarrelDirection(), speed, 1f, 1.8f);
-            barrage350mm.RequestPayload(marker);
-        }
-        if ((ShapeKeyboardButton.THREE.GetInputState().Pressed || ShapeKeyboardButton.LEFT.GetInputState().Pressed) && barrage100mm.IsReady)
-        {
-            PayloadMarkerSimple marker = new();
-            var speed = ShapeRandom.RandF(3250, 3750);
-            marker.Launch(ship.GetBarrelPosition(), ship.GetBarrelDirection(), speed, 1f, 1.8f);
-            barrage100mm.RequestPayload(marker);
-        }
-        if ((ShapeKeyboardButton.FOUR.GetInputState().Pressed || ShapeKeyboardButton.RIGHT.GetInputState().Pressed) && hyperStrafe.IsReady)
-        {
-            PayloadMarkerSimple marker = new();
-            var speed = ShapeRandom.RandF(3250, 3750);
-            marker.Launch(ship.GetBarrelPosition(), ship.GetBarrelDirection(), speed, 1f, 1.8f);
-            hyperStrafe.RequestPayload(marker);
-        }
-        // if ((ShapeKeyboardButton.ONE.GetInputState().Pressed || ShapeKeyboardButton.UP.GetInputState().Pressed) && orbitalStrike.IsReady)
-        // {
-        //     strategemChargeTimer = dt;
-        // }
-        //
-        // if ((ShapeKeyboardButton.ONE.GetInputState().Released || ShapeKeyboardButton.UP.GetInputState().Released) && orbitalStrike.IsReady)
-        // {
-        //     var speed = ShapeMath.LerpFloat(1000, 2500, StrategemChargeF);
-        //     orbitalStrike.Request(ship.GetBarrelPosition(), ship.GetBarrelDirection() * speed);
-        //     strategemChargeTimer = 0f;
-        // }
-        //
-        // if ((ShapeKeyboardButton.TWO.GetInputState().Pressed || ShapeKeyboardButton.DOWN.GetInputState().Pressed) && barrage350mm.IsReady)
-        // {
-        //     strategemChargeTimer = dt;
-        // }
-        //
-        // if ((ShapeKeyboardButton.TWO.GetInputState().Released || ShapeKeyboardButton.DOWN.GetInputState().Released) && barrage350mm.IsReady)
-        // {
-        //     var speed = ShapeMath.LerpFloat(1000, 2500, StrategemChargeF);
-        //     barrage350mm.Request(ship.GetBarrelPosition(), ship.GetBarrelDirection() * speed);
-        //     strategemChargeTimer = 0f;
-        // }
-        //
-        */
-        
     }
 
     private void UpdateFollower(float size)
@@ -612,35 +714,13 @@ public class EndlessSpaceCollision : ExampleScene
     }
     protected override void OnUpdateExample(GameTime time, ScreenInfo game, ScreenInfo gameUi,  ScreenInfo ui)
     {
-        
         foreach (var h in starTextureHandlers)
         {
             h.SetCameraRect(game.Area);
         }
-        
-        // if (lastCutShapeTimers.Count > 0)
-        // {
-        //     for (int i = lastCutShapeTimers.Count - 1; i >= 0; i--)
-        //     {
-        //         var timer = lastCutShapeTimers[i];
-        //         timer -= time.Delta;
-        //         if (timer <= 0f)
-        //         {
-        //             lastCutShapeTimers.RemoveAt(i);
-        //             lastCutShapes.RemoveAt(i);
-        //         }
-        //         else lastCutShapeTimers[i] = timer;
-        //     }
-        // }
 
         if (!gameOverScreenActive)
         {
-            // if (strategemChargeTimer > 0f)
-            // {
-            //     strategemChargeTimer += time.Delta;
-            //     if (strategemChargeTimer > strategemMaxChargeTime) strategemChargeTimer = strategemMaxChargeTime;
-            // }
-            
             ship.Update(time, game, gameUi, ui);
             minigun.Update(time.Delta, ship.GetPosition(), ship.GetCurSpeed());
             cannon.Update(time.Delta, ship.GetPosition(), ship.GetCurSpeed());
@@ -681,7 +761,7 @@ public class EndlessSpaceCollision : ExampleScene
             else
             {
                 var pos = ship.Transform.Position;
-                var direction = (game.MousePos - pos).Normalize();
+                var direction = Game.Instance.Input.CurrentInputDeviceType == InputDeviceType.Gamepad ?  ship.Transform.GetDirection() :  (game.MousePos - pos).Normalize();
                 var accuracy = Rng.Instance.RandF(-15, 15) * ShapeMath.DEGTORAD;
                 direction = direction.Rotate(accuracy);
                 var destructor = new Destructor(pos, direction, ship.CurSpeed,  Colors.PcCold.ColorRgba);
@@ -713,8 +793,8 @@ public class EndlessSpaceCollision : ExampleScene
             }
         }
         
-        CollisionHandler?.ResizeBounds(universe);
-        CollisionHandler?.Update(time.Delta);
+        spatialHash.SetBounds(universe);
+        // CollisionHandler?.Update(time.Delta);
 
         // var removed = 0;
         for (int i = asteroids.Count - 1; i >= 0; i--)
@@ -741,9 +821,12 @@ public class EndlessSpaceCollision : ExampleScene
                 }
 
                 float scoreBonus = 1f; // ShapeMath.LerpFloat(0.5f, 2, DifficultyFactor);
+                var relativePosition = game.Area.PointToRelativeCentered(a.Transform.Position);
                 
                 if (a.Big)
                 {
+                    shockwaveEffectHandler.Start(relativePosition, 0.8f, 0.04f, 1.5f, 0.08f, 2f);
+                    
                     killedBigAsteroids++;
                     CurScore += BigAsteroidScore * scoreBonus;
                     DifficultyScore += BigAsteroidScore * scoreBonus;
@@ -764,6 +847,8 @@ public class EndlessSpaceCollision : ExampleScene
                 }
                 else
                 {
+                    shockwaveEffectHandler.Start(relativePosition, 0.5f, 0.03f, 1.0f, 0.06f, 4f);
+                    
                     CurScore += SmallAsteroidScore * scoreBonus;
                     DifficultyScore += SmallAsteroidScore * scoreBonus;
                 }
@@ -811,6 +896,9 @@ public class EndlessSpaceCollision : ExampleScene
                 
             }
         }
+        
+        shockwaveEffectHandler.Update(time.Delta);
+        
     }
     protected override void OnDrawGameExample(ScreenInfo game)
     {
@@ -884,26 +972,17 @@ public class EndlessSpaceCollision : ExampleScene
         // {
         //     cutShape.Draw(cutShapeColor);
         // }
-       
-        
-        CircleDrawing.DrawCircleSectorLines(ship.Transform.Position, 250f, -80, -10, 12f, Colors.PcDark.ColorRgba, false, 8f);
-        CircleDrawing.DrawCircleSectorLines(ship.Transform.Position, 250f, -100, -170, 12f, Colors.PcDark.ColorRgba, false, 8f);
-        CircleDrawing.DrawCircleSectorLines(ship.Transform.Position, 250f, 170, 10, 12f, Colors.PcDark.ColorRgba, false, 8f);
 
-        if (minigun.ReloadF > 0f)
-        {
-            CircleDrawing.DrawCircleSectorLines(ship.Transform.Position, 250f, -80, ShapeMath.LerpFloat(-80, -10, minigun.ReloadF), 4f, Colors.PcWarm.ColorRgba, false, 8f);
-        }
-        else CircleDrawing.DrawCircleSectorLines(ship.Transform.Position, 250f, -80, ShapeMath.LerpFloat(-80, -10, 1f - minigun.ClipSizeF), 4f, Colors.PcCold.ColorRgba, false, 8f);
+        var sectorLineInfo = new LineDrawingInfo(12f, Colors.PcDark.ColorRgba);
+        var circle = new Circle(ship.Transform.Position, 250f);
+        circle.DrawSectorLines(-80f, -10f, 0f, sectorLineInfo, 0.75f);
+        circle.DrawSectorLines(-100f, -170f, 0f, sectorLineInfo, 0.75f);
+        circle.DrawSectorLines(170f, 10f, 0f, sectorLineInfo, 0.75f);
 
-        if (cannon.ReloadF > 0f)
-        {
-            CircleDrawing.DrawCircleSectorLines(ship.Transform.Position, 250f, -100, ShapeMath.LerpFloat(-100, -170, cannon.ReloadF), 4f, Colors.PcWarm.ColorRgba, false, 8f);
-        }
-        else CircleDrawing.DrawCircleSectorLines(ship.Transform.Position, 250f, -100, ShapeMath.LerpFloat(-100, -170, 1f - cannon.ClipSizeF), 4f, Colors.PcCold.ColorRgba, false, 8f);
-        
-        
-        CircleDrawing.DrawCircleSectorLines(ship.Transform.Position, 250f, 170, ShapeMath.LerpFloat(170, 10, ship.HealthF), 4f, Colors.PcWarm.ColorRgba, false, 8f);
+        sectorLineInfo = new LineDrawingInfo(4f, Colors.PcWarm.ColorRgba);
+        circle.DrawSectorLines(-80, ShapeMath.LerpFloat(-80, -10, minigun.ReloadF > 0f ?  minigun.ReloadF : 1f - minigun.ClipSizeF), 0f, sectorLineInfo, 0.75f);
+        circle.DrawSectorLines(-100, ShapeMath.LerpFloat(-100, -170, cannon.ReloadF > 0f ?  cannon.ReloadF : 1f - cannon.ClipSizeF), 0f, sectorLineInfo, 0.75f);
+        circle.DrawSectorLines(170, ShapeMath.LerpFloat(170, 10, ship.HealthF), 0f, sectorLineInfo, 0.75f);
     }
     protected override void OnDrawGameUIExample(ScreenInfo gameUi)
     {
@@ -951,12 +1030,14 @@ public class EndlessSpaceCollision : ExampleScene
         var multiDestructorStripedBarRect = multiDestructorRectBar.GetProgressRect(multiDestructorF, 0f, 1f, 0f, 0f).ApplyMargins(0.01f, 0.01f, 0.04f, 0.04f);
         LineDrawingInfo stripedBarInfo = new LineDrawingInfo(thickness, Colors.Warm, LineCapType.Capped, 4);
         
-        singleDestructorRect.DrawCorners(new LineDrawingInfo(thickness, Colors.Warm, LineCapType.Capped, 4), cornerLength);
+        // singleDestructorRect.DrawCorners(new LineDrawingInfo(thickness, Colors.Warm, LineCapType.Capped, 4), cornerLength);
+        singleDestructorRect.DrawCorners(thickness, Colors.Warm, cornerLength);
         singleDestructorRectBar.Draw(Colors.Medium);
         singleDestructorStripedBarRect.DrawStriped(singleDestructorRectBar.Width * 0.015f, -15, stripedBarInfo);
 
         
-        multiDestructorRect.DrawCorners(new LineDrawingInfo(thickness, Colors.Warm, LineCapType.Capped, 4), cornerLength);
+        // multiDestructorRect.DrawCorners(new LineDrawingInfo(thickness, Colors.Warm, LineCapType.Capped, 4), cornerLength);
+        multiDestructorRect.DrawCorners(thickness, Colors.Warm, cornerLength);
         multiDestructorRectBar.Draw(Colors.Medium);
         multiDestructorStripedBarRect.DrawStriped(multiDestructorRectBar.Width * 0.015f, 15, stripedBarInfo);
 

@@ -2,6 +2,7 @@ using System.Numerics;
 using ShapeEngine.Core.GameDef;
 using ShapeEngine.Core.Structs;
 using ShapeEngine.Geometry.CollisionSystem;
+using ShapeEngine.Geometry.CollisionSystem.CollisionHandlerDef;
 using ShapeEngine.Geometry.RectDef;
 using ShapeEngine.Input;
 using ShapeEngine.Pathfinding;
@@ -119,22 +120,19 @@ public abstract class Scene
             
         return true;
     }
-        
     
     /// <summary>
-    /// Initializes a new CollisionHandler with the specified grid dimensions.
+    /// Initializes a new <see cref="CollisionHandler"/> for this scene using the specified broadphase algorithm and starting capacity.
+    /// Only creates a new <see cref="CollisionHandler"/> if one does not already exist.
     /// </summary>
-    /// <param name="bounds">The bounds of the collision grid.</param>
-    /// <param name="rows">The number of rows in the grid.</param>
-    /// <param name="cols">The number of columns in the grid.</param>
-    /// <returns>
-    /// Returns true if a new CollisionHandler was created successfully.
-    /// Returns false if a CollisionHandler already exists, in which case no new CollisionHandler is created.
-    /// </returns>
-    protected bool InitCollisionHandler(Rect bounds, int rows, int cols)
+    /// <param name="broadphase">The broadphase algorithm to use for collision detection.</param>
+    /// <param name="startingCapacity">The initial capacity for the collision handler. Default is 1024.</param>
+    /// <returns>Returns true if a new <see cref="CollisionHandler"/> was created; false if one already exists.</returns>
+    protected bool InitCollisionHandler(IBroadphase broadphase, int startingCapacity = 1024)
     {
         if (CollisionHandler != null) return false;
-        CollisionHandler = new(bounds, rows, cols);
+        CollisionHandler = new(broadphase, startingCapacity);
+        
         return true;
     }
     /// <summary>
@@ -224,32 +222,19 @@ public abstract class Scene
         RemovePathfinder();
         OnClose();
     }
-    internal void ResolveUpdate(GameTime time, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui, bool fixedFramerateMode)
+    
+    internal void ResolveHandleInput(GameTime time, Vector2 mousePosGame, Vector2 mousePosGameUi, Vector2 mousePosUi)
     {
-        if (fixedFramerateMode)
-        {
-            SpawnArea?.Update(time, game, gameUi, ui, true);
-        }
-        else
-        {
-            SpawnArea?.Update(time, game, gameUi, ui, false);
-            CollisionHandler?.Update(time.Delta);
-            Pathfinder?.Update(time.Delta);
-        }
+        OnHandleInput(time, mousePosGame, mousePosGameUi, mousePosUi);
+    }
+    internal void ResolveUpdate(GameTime time, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
+    {
+        SpawnArea?.Update(time, game, gameUi, ui);
+        CollisionHandler?.Update(time.Delta);
+        Pathfinder?.Update(time.Delta);
         OnUpdate(time, game, gameUi, ui);
     }
-    internal void ResolveFixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-    {
-        SpawnArea?.FixedUpdate(fixedTime, game, gameUi, ui);
-        CollisionHandler?.Update(fixedTime.Delta);
-        Pathfinder?.Update(fixedTime.Delta);
-        OnFixedUpdate(fixedTime, game, gameUi, ui);
-    }
-    internal void ResolveInterpolateFixedUpdate(GameTime time, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui, float f)
-    {
-        SpawnArea?.InterpolateFixedUpdate(time, game, gameUi, ui, f);
-        OnInterpolateFixedUpdate(time, game, gameUi, ui, f);
-    }
+
     internal void ResolveGameTextureResized(int w, int h)
     {
         OnGameTextureResized(w, h);
@@ -401,33 +386,30 @@ public abstract class Scene
     protected virtual void OnGameTextureResized(int w, int h) { }
     
     /// <summary>
-    /// Called every frame. Called before FixedUpdate if fixed framerate is enabled.
+    /// Handle input for the scene. Override to process per-frame input using the provided timing
+    /// information and mouse coordinates in three coordinate spaces.
+    /// Default implementation does nothing.
     /// </summary>
-    /// <param name="time"></param>
-    /// <param name="game"></param>
-    /// <param name="gameUi"></param>
-    /// <param name="ui"></param>
+    /// <param name="time">Frame timing and delta information.</param>
+    /// <param name="mousePosGame">Mouse position in game world coordinates (camera-transformed).</param>
+    /// <param name="mousePosGameUi">Mouse position in the game UI render target coordinates.</param>
+    /// <param name="mousePosUi">Mouse position in the main UI (screen) coordinates.</param>
+    protected virtual void OnHandleInput(GameTime time, Vector2 mousePosGame, Vector2 mousePosGameUi, Vector2 mousePosUi) { }
+    
+    /// <summary>
+    /// Called once per frame to update the scene's logic. Override this method to perform
+    /// per-frame updates such as game object state updates, AI, timers, etc.
+    /// The default implementation does nothing.
+    /// </summary>
+    /// <param name="time">Frame timing and delta information.</param>
+    /// <param name="game">Screen information for the game render target (camera-transformed).</param>
+    /// <param name="gameUi">Screen information for the game UI render target (not affected by camera).</param>
+    /// <param name="ui">Screen information for the main UI (screen coordinates).</param>
+    /// <remarks>
+    /// This method is subject to fixed framerate settings and dynamic substepping, if enabled.
+    /// </remarks>
     protected virtual void OnUpdate(GameTime time, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui) { }
     
-    
-    /// <summary>
-    /// Only called when fixed framerate is enabled. Called in a fixed interval.
-    /// </summary>
-    /// <param name="fixedTime"></param>
-    /// <param name="game"></param>
-    /// <param name="gameUi"></param>
-    /// <param name="ui"></param>
-    protected virtual void OnFixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui) { }
-    
-    /// <summary>
-    /// Only called when fixed framerate is enabled. Called every frame after all fixed update calls.
-    /// </summary>
-    /// <param name="time"></param>
-    /// <param name="game"></param>
-    /// <param name="gameUi"></param>
-    /// <param name="ui"></param>
-    /// <param name="f"></param>
-    protected virtual void OnInterpolateFixedUpdate(GameTime time, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui, float f) { }
     /// <summary>
     /// Called before SpawnArea DrawGame is called.
     /// </summary>

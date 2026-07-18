@@ -59,8 +59,6 @@ namespace Examples.Scenes.ExampleScenes
     }
     internal class ControlNodeButton : ControlNode
     {
-        private float inputCooldownTimer = 0f;
-        private const float inputCooldown = 0.1f;
         public ControlNodeButton(string text, AnchorPoint anchor, Vector2 stretch)
         {
             this.Anchor = anchor;
@@ -73,24 +71,39 @@ namespace Examples.Scenes.ExampleScenes
             this.InputFilter = InputFilter.All;
         }
 
-        protected override bool GetPressedState()
+        protected override bool GetButtonPressedState()
         {
             if (!Selected) return false;
-            var acceptState = GameloopExamples.Instance.InputActionUIAccept.Consume(out _);
-            return acceptState is { Consumed: false, Pressed: true };
-            
-            // if (!Selected) return false;
-            // return Raylib.IsKeyDown(KeyboardKey.Space);
+            //Always consumed for some reason...
+            // var acceptState = GameloopExamples.Instance.InputActionUIAccept.Consume(out _);
+            // return acceptState is { Consumed: false, Pressed: true };
+            return GameloopExamples.Instance.InputActionUIAccept.State.Pressed;
         }
 
-        protected override bool GetMousePressedState()
+        protected override bool GetMouseButtonPressedState()
         {
             if (!MouseInside) return false;
-            var acceptState = GameloopExamples.Instance.InputActionUIAcceptMouse.Consume(out _);
-            return acceptState is { Consumed: false, Pressed: true };
-            
-            // if (!MouseInside) return false;
-            // return Raylib.IsMouseButtonDown(MouseButton.Left);
+            //Always consumed for some reason...
+            // var acceptState = GameloopExamples.Instance.InputActionUIAcceptMouse.Consume(out _);
+            // return acceptState is { Consumed: false, Pressed: true };
+            return GameloopExamples.Instance.InputActionUIAcceptMouse.State.Pressed;
+        }
+        protected override bool GetButtonReleasedState()
+        {
+            if (!Selected) return false;
+            //Always consumed for some reason...
+            // var acceptState = GameloopExamples.Instance.InputActionUIAccept.Consume(out _);
+            // return acceptState is { Consumed: false, Released: true };
+            return GameloopExamples.Instance.InputActionUIAccept.State.Released;
+        }
+
+        protected override bool GetMouseButtonReleasedState()
+        {
+            if (!MouseInside) return false;
+            //Always consumed for some reason...
+            // var acceptState = GameloopExamples.Instance.InputActionUIAcceptMouse.Consume(out _);
+            // return acceptState is { Consumed: false, Released: true };
+            return GameloopExamples.Instance.InputActionUIAcceptMouse.State.Released;
         }
 
         public override Direction GetNavigationDirection()
@@ -99,18 +112,6 @@ namespace Examples.Scenes.ExampleScenes
             var downState = GameloopExamples.Instance.InputActionUIDown.Consume(out _);
             var rightState = GameloopExamples.Instance.InputActionUIRight.Consume(out _);
             var leftState = GameloopExamples.Instance.InputActionUILeft.Consume(out _);
-            
-            if (inputCooldownTimer > 0f)
-            {
-                if (upState is { Consumed: false, Released: true } ||
-                    downState is { Consumed: false, Released: true } ||
-                    rightState is { Consumed: false, Released: true } ||
-                    leftState is { Consumed: false, Released: true })
-                {
-                    inputCooldownTimer = 0f;
-                }
-                else return new();
-            }
             
             var hor = 0;
             var vert = 0;
@@ -126,7 +127,6 @@ namespace Examples.Scenes.ExampleScenes
         {
             if (value)
             {
-                inputCooldownTimer = inputCooldown;
                 ContainerStretch =  1.25f;
             }
             else ContainerStretch = 1f;
@@ -164,16 +164,7 @@ namespace Examples.Scenes.ExampleScenes
             
         }
 
-        protected override void OnUpdate(float dt, Vector2 mousePos, bool mousePosValid)
-        {
-            if (inputCooldownTimer > 0)
-            {
-                inputCooldownTimer -= dt;
-            }
-        }
     }
-    
-    
     
     
     public class ControlNodeExampleScene : ExampleScene
@@ -349,7 +340,7 @@ namespace Examples.Scenes.ExampleScenes
             
             container.UpdateRect(ui.Area);
             container.Update(time.Delta, ui.MousePos);
-            navigator.Update();
+            navigator.Update(time.Delta);
         }
 
         protected override void OnDrawUIExample(ScreenInfo ui)

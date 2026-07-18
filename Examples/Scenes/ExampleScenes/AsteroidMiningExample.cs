@@ -8,6 +8,7 @@ using ShapeEngine.Core.Structs;
 using ShapeEngine.Geometry;
 using ShapeEngine.Geometry.CircleDef;
 using ShapeEngine.Geometry.CollisionSystem;
+using ShapeEngine.Geometry.CollisionSystem.CollisionHandlerDef;
 using ShapeEngine.Geometry.PointsDef;
 using ShapeEngine.Geometry.PolygonDef;
 using ShapeEngine.Geometry.RectDef;
@@ -15,9 +16,10 @@ using ShapeEngine.Geometry.SegmentDef;
 using ShapeEngine.Geometry.TriangleDef;
 using ShapeEngine.Input;
 using ShapeEngine.Random;
+using ShapeEngine.ShapeClipper;
+
 namespace Examples.Scenes.ExampleScenes
 {
-    
     public class AsteroidShard : GameObject
     {
         // private Polygon shape;
@@ -78,17 +80,20 @@ namespace Examples.Scenes.ExampleScenes
             }
         }
 
-        public override void FixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-        {
-            
-        }
-
         public override void DrawGame(ScreenInfo game)
         {
-            //SDrawing.DrawCircleFast(pos, 4f, RED);
-            var c = this.color.ColorRgba.ChangeAlpha((byte)(255 * lifetimeF));
-            //color = this.color;
-            shape.DrawLines(2f * lifetimeF, c);
+            if(lifetimeF > 0.8f)
+            {
+                shape.Draw(color.ColorRgba);
+                shape.DrawLines(1f, ColorRgba.Black, 4f, true);
+            }
+            else
+            {
+                var scaledShape = shape.ScaleSize(lifetimeF, shape.GetCentroid());
+                scaledShape.Draw(color.ColorRgba);
+                scaledShape.DrawLines(1f, ColorRgba.Black, 4f, true);
+            }
+            
         }
 
         public override void DrawGameUI(ScreenInfo gameUi)
@@ -98,6 +103,7 @@ namespace Examples.Scenes.ExampleScenes
 
         public override Rect GetBoundingBox() { return shape.GetBoundingBox(); }
     }
+    
     public class Asteroid : CollisionObject
     {
         internal class DamagedSegment
@@ -255,10 +261,6 @@ namespace Examples.Scenes.ExampleScenes
         {
             damagedSegments.Update(time.Delta);
         }
-        public override void FixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-        {
-            
-        }
         public override void DrawGame(ScreenInfo game)
         {
             var p = GetPolygon();
@@ -415,10 +417,6 @@ namespace Examples.Scenes.ExampleScenes
 
             }
         }
-        public override void FixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-        {
-            
-        }
         private (Vector2 endPoint, float remainingLength, Vector2 newDir) CastLaser(float dt, Vector2 start, Vector2 dir, float length, float damagePerSecond, CollisionHandler col)
         {
             var endPoint = start + dir * length;
@@ -460,7 +458,8 @@ namespace Examples.Scenes.ExampleScenes
             if (hybernate) return;
             var c = Colors.Cold;
             shape.DrawLines(4f, c);
-            CircleDrawing.DrawCircle(tip, 8f, c);
+            var circle = new Circle(tip, 8f);
+            circle.Draw(c, 0.1f);
 
             if (laserEnabled && laserPoints.Count > 1)
             {
@@ -468,7 +467,8 @@ namespace Examples.Scenes.ExampleScenes
                 {
                     Segment laserSegment = new(laserPoints[i], laserPoints[i + 1]);
                     laserSegment.Draw(4f, c);
-                    CircleDrawing.DrawCircle(laserPoints[i + 1], Rng.Instance.RandF(6f, 12f), c, 12);
+                    var laserPointCircle = new Circle(laserPoints[i + 1], Rng.Instance.RandF(6f, 12f));
+                    laserPointCircle.Draw(c, 0.1f);
                 }
                 
             }
@@ -541,7 +541,8 @@ namespace Examples.Scenes.ExampleScenes
         //Polygons testShapes = new();
         //Rect clipRect = new();
         //RectD clipperRect = new();
-
+        private static Polygon cutShapeBuffer = new();
+        private static FractureInfo fractureInfoBuffer = new();
         private readonly InputAction iaModeChange;
         private readonly InputAction iaAddShape;
         private readonly InputAction iaCutShape;
@@ -554,13 +555,15 @@ namespace Examples.Scenes.ExampleScenes
         private readonly InputAction iaDragLaser;
         private readonly InputAction iaShootLaser;
         private readonly InputActionTree inputActionTree;
-        
+
+        private readonly BroadphaseSpatialHash spatialHash;
         public AsteroidMiningExample()
         {
             Title = "Asteroid Mining Example";
             UpdateBoundaryRect(Game.Instance.GameScreenInfo.Area);
             InitSpawnArea(boundaryRect);
-            InitCollisionHandler(boundaryRect, 4, 4);
+            spatialHash = new BroadphaseSpatialHash(boundaryRect, 4, 4);
+            InitCollisionHandler(spatialHash);
             
             InputActionSettings defaultSettings = new();
             
@@ -655,8 +658,8 @@ namespace Examples.Scenes.ExampleScenes
         protected override void OnUpdateExample(GameTime time, ScreenInfo game, ScreenInfo gameUi,  ScreenInfo ui)
         {
             UpdateBoundaryRect(game.Area);
-            SpawnArea?.ResizeBounds(boundaryRect);
-            CollisionHandler?.ResizeBounds(boundaryRect);
+            SpawnArea?.SetBounds(boundaryRect);
+            spatialHash.SetBounds(boundaryRect);
             // spawnArea.Update(time, game, ui);
 
             for (int i = lastCutOuts.Count - 1; i >= 0; i--)
@@ -668,36 +671,38 @@ namespace Examples.Scenes.ExampleScenes
         }
         private void OnAsteroidFractured(Asteroid a, Vector2 point)
         {
-            var cutShape = Polygon.Generate(point, Rng.Instance.RandI(6, 12), 35, 100);
-            if(cutShape != null) FractureAsteroid(a, cutShape);
+            cutShapeBuffer.Clear();
+            if (!Polygon.Generate(point, Rng.Instance.RandI(6, 12), 35, 100, cutShapeBuffer)) return;
+            if(cutShapeBuffer.Count > 0) FractureAsteroid(a, cutShapeBuffer);
         }
+       
         private void FractureAsteroid(Asteroid a, Polygon cutShape)
         {
             RemoveAsteroid(a);
             var asteroidShape = a.GetPolygon();
             var color = a.GetColor();
-            var fracture = fractureHelper.Fracture(asteroidShape, cutShape);
+            fractureHelper.Fracture(asteroidShape, cutShape, fractureInfoBuffer);
             
-            foreach (var cutoutShape in fracture.Cutouts)
+            foreach (var cutoutShape in fractureInfoBuffer.Cutouts)
             {
                 lastCutOuts.Add(new Cutout(cutoutShape));
             }
 
             var center = cutShape.GetCentroid();
-            foreach (var piece in fracture.Pieces)
+            Console.WriteLine($"Asteroid Fractured: with {fractureInfoBuffer.Pieces.Count} Pieces.");
+            foreach (var piece in fractureInfoBuffer.Pieces)
             {
                 // Vector2 center = piece.GetCentroid();
                 AsteroidShard shard = new(piece, center, color);
                 SpawnArea?.AddGameObject(shard);
             }
-            if (fracture.NewShapes.Count > 0)
+            if (fractureInfoBuffer.NewShapes.Count > 0)
             {
-                foreach (var shape in fracture.NewShapes)
+                foreach (var shape in fractureInfoBuffer.NewShapes)
                 {
                     float shapeArea = shape.GetArea();
                     if (shapeArea > MinPieceArea)
                     {
-
                         var relativeInfo = shape.ToRelative();
                         
                         Asteroid newAsteroid = new(relativeInfo.shape, relativeInfo.transform);
@@ -753,8 +758,7 @@ namespace Examples.Scenes.ExampleScenes
         }
         private void GenerateTriangle()
         {
-            var shape = Polygon.Generate(curPos, 3, curSize / 2, curSize);
-            if (shape != null) curShape = shape;
+            Polygon.Generate(curPos, 3, curSize / 2, curSize, curShape);
         }
         private void GenerateRect()
         {
@@ -763,8 +767,7 @@ namespace Examples.Scenes.ExampleScenes
         }
         private void GeneratePoly()
         {
-            var shape = Polygon.Generate(curPos, 16, curSize * 0.25f, curSize);
-            if(shape != null) curShape = shape;
+            Polygon.Generate(curPos, 16, curSize * 0.25f, curSize, curShape);
         }
         private void PolyModeStarted()
         {
@@ -781,23 +784,6 @@ namespace Examples.Scenes.ExampleScenes
         }
         protected override void OnHandleInputExample(float dt, Vector2 mousePosGame, Vector2 mousePosGameUi, Vector2 mousePosUI)
         {
-            //clipRect = new(mousePosGame, new Vector2(100, 300), new Vector2(0f, 1f));
-            //clipperRect = clipRect.ToClipperRect();
-            //if (IsKeyPressed(KeyboardKey.KEY_NINE))
-            //{
-            //    Polygons newShapes = new Polygons();
-            //    foreach (var shape in testShapes)
-            //    {
-            //        if (shape.OverlapShape(clipRect))
-            //        {
-            //            var result = SClipper.ClipRect(clipRect, shape, 2, false).ToPolygons(true);
-            //            if (result.Count > 0) newShapes.AddRange(result);
-            //        }
-            //        else newShapes.Add(shape);
-            //    }
-            //    testShapes = newShapes;
-            //}
-
             if (CollisionHandler == null) return;
 
             var gamepad = Input.GamepadManager.LastUsedGamepad;
@@ -828,7 +814,6 @@ namespace Examples.Scenes.ExampleScenes
                         asteroid.Overlapped();
                     }
                 }
-                
 
                 if (iaAddShape.State.Pressed) //add polygon (merge)
                 {
@@ -845,7 +830,12 @@ namespace Examples.Scenes.ExampleScenes
                                 
                             }
                         }
-                        var finalShapes = ShapeClipper.UnionMany(curShape.ToPolygon(), polys, Clipper2Lib.FillRule.NonZero).ToPolygons(true);
+
+                        Polygons finalShapes = new();
+                        var curPoly = curShape.ToPolygon();
+                        curPoly.ClipUnionMany(polys, finalShapes);
+                        finalShapes.RemoveAllHoles();
+                        // var finalShapes = curShape.ToPolygon().UnionMany(polys).ToPolygons(true);
                         if (finalShapes.Count > 0)
                         {
                             foreach (var f in finalShapes)
@@ -883,8 +873,8 @@ namespace Examples.Scenes.ExampleScenes
                     {
                         if (candidate is Asteroid asteroid)
                         {
+                            allCutOuts.Add(cutShape);
                             FractureAsteroid(asteroid, cutShape);
-                            
                         }
                     }
                     if (allCutOuts.Count > 0)

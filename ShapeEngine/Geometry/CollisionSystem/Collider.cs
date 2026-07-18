@@ -116,6 +116,13 @@ public abstract class Collider : Shape
     /// Gets or sets whether this collider should compute intersection details (if false, only overlaps are reported).
     /// </summary>
     public bool ComputeIntersections { get; set; }
+    
+    /// <summary>
+    /// Gets or sets the broadphase collision detection strategy for this collider.
+    /// Determines how the collider is represented in the broadphase collision system.
+    /// </summary>
+    public BroadphaseType BroadphaseType { get; set; } = BroadphaseType.FullShape;
+    
   
     /// <summary>
     /// Initializes a new instance of the <see cref="Collider"/> class with default offset values.
@@ -300,25 +307,25 @@ public abstract class Collider : Shape
         {
             case ShapeType.Circle:
                 var c = GetCircleShape();
-                return c.ProjectShape(v);
+                return c.ProjectShape(v, 8, false);
             case ShapeType.Segment:
                 var s = GetSegmentShape();
-                return s.ProjectShape(v);
+                return s.ProjectShape(v, false);
             case ShapeType.Triangle:
                 var t = GetTriangleShape();
-                return t.ProjectShape(v);
+                return t.ProjectShape(v, false);
             case ShapeType.Rect:
                 var r = GetRectShape();
-                return r.ProjectShape(v);
+                return r.ProjectShape(v, false);
             case ShapeType.Quad:
                 var q = GetQuadShape();
-                return q.ProjectShape(v);
+                return q.ProjectShape(v, false);
             case ShapeType.Poly:
                 var p = GetPolygonShape();
-                return p.ProjectShape(v);
+                return p.ProjectShape(v, false);
             case ShapeType.PolyLine:
                 var pl = GetPolylineShape();
-                return pl.ProjectShape(v);
+                return pl.ProjectShape(v, false);
         }
 
         return null;
@@ -335,7 +342,7 @@ public abstract class Collider : Shape
     /// <remarks>
     /// The result depends on the runtime type of both this collider and the provided shape.
     /// </remarks>
-    public ClosestPointResult GetClosestPoint(IShape shape)
+    public new  ClosestPointResult GetClosestPoint(IShape shape)
     {
         switch (shape.GetShapeType())
         {
@@ -644,7 +651,7 @@ public abstract class Collider : Shape
     /// The entire shape must be fully enclosed within this collider for the method to return true.
     /// Partial overlaps or edge contacts are not considered as containment.
     /// </remarks>
-    public bool ContainsShape(IShape shape)
+    public new bool ContainsShape(IShape shape)
     {
         switch (shape.GetShapeType())
         {

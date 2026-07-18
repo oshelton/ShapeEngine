@@ -1,4 +1,5 @@
 using System.Numerics;
+using ShapeEngine.Core;
 using ShapeEngine.Geometry.RayDef;
 using ShapeEngine.Geometry.RectDef;
 using ShapeEngine.Geometry.SegmentDef;
@@ -11,7 +12,7 @@ namespace ShapeEngine.Geometry.LineDef;
 /// Represents an infinite line in 2D space, defined by a point on the line and a direction vector.
 /// Includes methods for geometric operations such as intersections, overlaps, and closest point calculations.
 /// </summary>
-public readonly partial struct Line
+public readonly partial struct Line : IShapeTypeProvider, IEquatable<Line>
 {
     /// <summary>
     /// The maximum length used for line calculations, primarily as a safeguard for infinite lines in geometric operations.
@@ -315,5 +316,158 @@ public readonly partial struct Line
         return new (Point, newDir, normalFlipped);
     }
     #endregion
+
+    /// <summary>
+    /// Gets the <see cref="ShapeType"/> for this shape.
+    /// </summary>
+    /// <returns><see cref="ShapeType.Line"/> indicating this instance represents a line.</returns>
+    public ShapeType GetShapeType() => ShapeType.Line;
+
+    /// <summary>
+    /// Determines whether this instance is equal to another <see cref="Line"/>.
+    /// </summary>
+    /// <param name="other">The other <see cref="Line"/> to compare against.</param>
+    /// <returns><c>true</c> if both lines represent the same geometric line; otherwise <c>false</c>.</returns>
+    /// <remarks>
+    /// Direction is compared up to sign, so <c>dir</c> and <c>-dir</c> are treated as the same line direction.
+    /// Invalid lines are equal only when both lines are invalid and their points are equal.
+    /// </remarks>
+    public bool Equals(Line other)
+    {
+        return Equals(other, DecimalPrecision.DefaultDecimalPlaces);
+    }
+
+    /// <summary>
+    /// Determines whether this instance is equal to another <see cref="Line"/> using quantized comparison.
+    /// </summary>
+    /// <param name="other">The other <see cref="Line"/> to compare against.</param>
+    /// <param name="decimalPlaces">The number of decimal places used to quantize coordinates before comparison.</param>
+    /// <returns><c>true</c> if both lines represent the same geometric line after quantization; otherwise <c>false</c>.</returns>
+    /// <remarks>
+    /// For valid lines, equality depends on a canonicalized direction and the line's perpendicular offset from the origin.
+    /// The stored point itself does not need to match as long as both points lie on the same line.
+    /// Invalid lines are equal only when both are invalid and their points are equal after quantization.
+    /// </remarks>
+    public bool Equals(Line other, int decimalPlaces)
+    {
+        if (decimalPlaces < 0) decimalPlaces = DecimalPrecision.DefaultDecimalPlaces;
+
+        DecimalQuantizer quantizer = new(decimalPlaces);
+        bool invalidA = IsInvalidDirection(Direction, quantizer);
+        bool invalidB = IsInvalidDirection(other.Direction, quantizer);
+        if (invalidA || invalidB)
+        {
+            return invalidA && invalidB && quantizer.QuantizedEquals(Point, other.Point);
+        }
+
+        Vector2 direction = CanonicalizeDirection(Direction);
+        Vector2 otherDirection = CanonicalizeDirection(other.Direction);
+        if (!quantizer.QuantizedEquals(direction, otherDirection)) return false;
+
+        Vector2 normal = GetCanonicalNormal(direction);
+        float offset = Vector2.Dot(normal, Point);
+        float otherOffset = Vector2.Dot(normal, other.Point);
+        return quantizer.QuantizedEquals(offset, otherOffset);
+    }
+
+    /// <summary>
+    /// Creates a stable 64-bit hash key for the current line.
+    /// </summary>
+    /// <param name="decimalPlaces">The number of decimal places used to quantize coordinates before hashing.</param>
+    /// <returns>A 64-bit hash key suitable for cache keys and change detection.</returns>
+    public ulong GetHashKey(int decimalPlaces = DecimalPrecision.DefaultDecimalPlaces)
+    {
+        if (decimalPlaces < 0) decimalPlaces = DecimalPrecision.DefaultDecimalPlaces;
+
+        DecimalQuantizer quantizer = new(decimalPlaces);
+        Fnv1aHashQuantizer hashQuantizer = new(decimalPlaces);
+        if (IsInvalidDirection(Direction, quantizer))
+        {
+            return hashQuantizer.GetHash(Point);
+        }
+
+        Vector2 direction = CanonicalizeDirection(Direction);
+        Vector2 normal = GetCanonicalNormal(direction);
+        float offset = Vector2.Dot(normal, Point);
+
+        return hashQuantizer.GetHash(direction.X, direction.Y, offset);
+    }
+
+    /// <summary>
+    /// Creates a fixed-width hexadecimal string representation of this line hash key.
+    /// </summary>
+    /// <param name="decimalPlaces">The number of decimal places used to quantize coordinates before hashing.</param>
+    /// <returns>A 16-character uppercase hexadecimal hash key string.</returns>
+    public string GetHashKeyHex(int decimalPlaces = DecimalPrecision.DefaultDecimalPlaces) => GetHashKey(decimalPlaces).ToString("X16");
+
+    /// <summary>
+    /// Creates a string representation of this line hash key.
+    /// </summary>
+    /// <param name="decimalPlaces">The number of decimal places used to quantize coordinates before hashing.</param>
+    /// <returns>A stable hexadecimal hash key string.</returns>
+    public string GetHashKeyString(int decimalPlaces = DecimalPrecision.DefaultDecimalPlaces) => GetHashKeyHex(decimalPlaces);
+
+    /// <summary>
+    /// Determines whether two lines are equal.
+    /// </summary>
+    /// <param name="left">The first line to compare.</param>
+    /// <param name="right">The second line to compare.</param>
+    /// <returns><c>true</c> if the lines are equal; otherwise, <c>false</c>.</returns>
+    public static bool operator ==(Line left, Line right)
+    {
+        return left.Equals(right);
+    }
+
+    /// <summary>
+    /// Determines whether two lines are not equal.
+    /// </summary>
+    /// <param name="left">The first line to compare.</param>
+    /// <param name="right">The second line to compare.</param>
+    /// <returns><c>true</c> if the lines are not equal; otherwise, <c>false</c>.</returns>
+    public static bool operator !=(Line left, Line right)
+    {
+        return !(left == right);
+    }
+
+    /// <summary>
+    /// Determines whether the specified object is equal to this instance of <see cref="Line"/>.
+    /// </summary>
+    /// <param name="obj">The object to compare with the current <see cref="Line"/>. May be <c>null</c> or of a different type.</param>
+    /// <returns>
+    /// <c>true</c> if <paramref name="obj"/> is a <see cref="Line"/> equal to this instance; otherwise <c>false</c>.
+    /// </returns>
+    public override bool Equals(object? obj)
+    {
+        return obj is Line other && Equals(other);
+    }
+
+    /// <summary>
+    /// Returns a hash code for this <see cref="Line"/> instance.
+    /// </summary>
+    /// <returns>A 32-bit hash code derived from the stable 64-bit line hash key.</returns>
+    public override int GetHashCode()
+    {
+        ulong hashKey = GetHashKey();
+        return unchecked((int)(hashKey ^ (hashKey >> 32)));
+    }
+
+    private static Vector2 CanonicalizeDirection(Vector2 direction)
+    {
+        if (direction.X < 0f) return -direction;
+        if (direction.X == 0f && direction.Y < 0f) return -direction;
+        return direction;
+    }
+
+    private static Vector2 GetCanonicalNormal(Vector2 direction)
+    {
+        return new Vector2(-direction.Y, direction.X);
+    }
+
+    private static bool IsInvalidDirection(Vector2 direction, DecimalQuantizer quantizer)
+    {
+        return quantizer.Quantize(direction.X) == 0L &&
+               quantizer.Quantize(direction.Y) == 0L;
+    }
+
 }
 

@@ -1,0 +1,139 @@
+name: Build/Attach Examples & ResourcePacker Artifacts to ShapeEngine Releases
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach artifacts to"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    env:
+      dotnet-version: "10.0.x"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            runtime: win-x64
+          - os: ubuntu-latest
+            runtime: linux-x64
+          - os: macos-latest
+            runtime: osx-arm64
+          - os: macos-15-intel
+            runtime: osx-x64
+
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.runtime }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.dotnet-version }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Publish Examples
+        run: >
+          dotnet publish ./Examples/Examples.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --self-contained true
+          -o ./publish/Examples/${{ matrix.runtime }}
+
+      - name: Verify Examples publish output
+        shell: bash
+        run: |
+          test -d ./publish/Examples/${{ matrix.runtime }}
+          test -n "$(find ./publish/Examples/${{ matrix.runtime }} -type f -print -quit)"
+          find ./publish/Examples/${{ matrix.runtime }} -type f | sed -n '1,10p'
+
+      - name: Publish ResourcePacker
+        run: >
+          dotnet publish ./ResourcePacker/ResourcePacker.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --self-contained true
+          -o ./publish/ResourcePacker/${{ matrix.runtime }}
+
+      - name: Verify ResourcePacker publish output
+        shell: bash
+        run: |
+          test -d ./publish/ResourcePacker/${{ matrix.runtime }}
+          test -n "$(find ./publish/ResourcePacker/${{ matrix.runtime }} -type f -print -quit)"
+          find ./publish/ResourcePacker/${{ matrix.runtime }} -type f | sed -n '1,10p'
+
+      - name: Create zip archives (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ./artifacts | Out-Null
+          Compress-Archive -Path "./publish/Examples/${{ matrix.runtime }}/*" -DestinationPath "./artifacts/Examples-${{ matrix.runtime }}.zip" -Force
+          Compress-Archive -Path "./publish/ResourcePacker/${{ matrix.runtime }}/*" -DestinationPath "./artifacts/ResourcePacker-${{ matrix.runtime }}.zip" -Force
+
+      - name: Create zip archives (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p ./artifacts
+          cd ./publish/Examples/${{ matrix.runtime }}
+          zip -r "$GITHUB_WORKSPACE/artifacts/Examples-${{ matrix.runtime }}.zip" .
+          cd "$GITHUB_WORKSPACE"
+          cd ./publish/ResourcePacker/${{ matrix.runtime }}
+          zip -r "$GITHUB_WORKSPACE/artifacts/ResourcePacker-${{ matrix.runtime }}.zip" .
+          cd "$GITHUB_WORKSPACE"
+
+      - name: Verify zip archives
+        shell: bash
+        run: |
+          test -f ./artifacts/Examples-${{ matrix.runtime }}.zip
+          test -f ./artifacts/ResourcePacker-${{ matrix.runtime }}.zip
+          ls -lh ./artifacts
+
+      - name: Upload zipped artifacts
+        uses: actions/upload-artifact@v4.5.0
+        with:
+          name: ${{ matrix.runtime }}-zips
+          path: ./artifacts/*.zip
+
+  attach:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download zipped artifacts
+        uses: actions/download-artifact@v4.3.0
+        with:
+          pattern: "*-zips"
+          merge-multiple: true
+          path: ./artifacts
+
+      - name: Verify downloaded zip artifacts
+        shell: bash
+        run: |
+          if [ ! -d "./artifacts" ] || [ -z "$(find ./artifacts -maxdepth 1 -type f -name '*.zip' 2>/dev/null)" ]; then
+            echo "No zip artifacts were downloaded."
+            echo "Expected zip files from the matrix jobs, but none were found."
+            exit 1
+          fi
+
+          ls -lh ./artifacts
+
+      - name: Upload zip files to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.event.release.tag_name }}
+          files: ./artifacts/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean up artifacts
+        run: rm -rf ./artifacts

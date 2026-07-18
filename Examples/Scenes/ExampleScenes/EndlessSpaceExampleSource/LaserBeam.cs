@@ -4,6 +4,7 @@ using ShapeEngine.Core;
 using ShapeEngine.Core.Structs;
 using ShapeEngine.Geometry;
 using ShapeEngine.Geometry.CollisionSystem;
+using ShapeEngine.Geometry.CollisionSystem.CollisionHandlerDef;
 using ShapeEngine.Geometry.RayDef;
 using ShapeEngine.Geometry.SegmentDef;
 using ShapeEngine.Input;
@@ -53,7 +54,7 @@ internal class LaserBeam
         hitPoint = new();
     }
     
-    public void Update(Vector2 position, Vector2 direction, float dt, CollisionHandler collisionHandler)
+    public void Update(Vector2 position, Vector2 direction, float dt, CollisionHandler collisionHandler, InputState inputState)
     {
         laserBeamWidthVariationFactorTimer -= dt;
         if (laserBeamWidthVariationFactorTimer <= 0f)
@@ -72,16 +73,21 @@ internal class LaserBeam
             }
         }
         
+        
+        
+        
         if (!isCharging && !isFiring)
         {
-            if (ShapeMouseButton.LEFT.GetInputState().Pressed)
+            if(inputState.Pressed)
+            // if (ShapeMouseButton.LEFT.GetInputState().Pressed)
             {
                 isCharging = true;
             }
         }
         else if (isCharging)
         {
-            if (ShapeMouseButton.LEFT.GetInputState().Released)
+            if(inputState.Released)
+            // if (ShapeMouseButton.LEFT.GetInputState().Released)
             {
                 isCharging = false;
                 chargeTimer = 0f;
@@ -89,7 +95,8 @@ internal class LaserBeam
         }
         else if (isFiring)
         {
-            if (ShapeMouseButton.LEFT.GetInputState().Released)
+            if(inputState.Released)
+            // if (ShapeMouseButton.LEFT.GetInputState().Released)
             {
                 isFiring = false;
                 damageTimer = 0f;
@@ -189,13 +196,12 @@ internal class LaserBeam
         var f = isFiring ? 1f : isCharging ?  chargeTimer / chargeDuration : 0f;
         var color =  paletteColor.ColorRgba;
         var w = width.Lerp(f) * laserBeamWidthVariationFactor;
-        var c = color.SetAlpha(200).Lerp(color, f);
+        var c = color;
         Ray.Point.Draw(w, c);
         
         if (!isFiring || !hitPoint.Valid)
         {
             Ray.Draw(15000, w, c);
-            
         }
         else
         {

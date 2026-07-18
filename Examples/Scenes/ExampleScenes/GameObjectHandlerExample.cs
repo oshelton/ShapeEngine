@@ -42,12 +42,13 @@ namespace Examples.Scenes.ExampleScenes
             col.Enabled = true;
             col.CollisionMask = BitFlag.Empty;
             col.CollisionLayer = CollisionFlags.WallFlag;
-
             Layer = SpawnAreaLayers.WallFlag;
             
             AddCollider(col);
 
             polyCollider = col;
+
+            MotionType = MotionType.Static;
         }
 
         public override void DrawGame(ScreenInfo game)
@@ -61,10 +62,6 @@ namespace Examples.Scenes.ExampleScenes
             
         }
         
-        public override void FixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-        {
-            
-        }
     }
     internal class BoundaryWall : CollisionObject
     {
@@ -85,6 +82,8 @@ namespace Examples.Scenes.ExampleScenes
             AddCollider(col);
 
             polyCollider = col;
+            
+            MotionType = MotionType.Static;
         }
 
         public override void DrawGame(ScreenInfo game)
@@ -95,12 +94,7 @@ namespace Examples.Scenes.ExampleScenes
         public override void DrawGameUI(ScreenInfo gameUi)
         {
         }
-        public override void FixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-        {
-            
-        }
     }
-    
     internal class Overlapper : CollisionObject
     {
         private CircleCollider circleCollider;
@@ -200,7 +194,6 @@ namespace Examples.Scenes.ExampleScenes
         {
         }
     }
-   
     internal class Ball : CollisionObject
     {
         private CircleCollider circleCollider;
@@ -243,7 +236,7 @@ namespace Examples.Scenes.ExampleScenes
         public override void DrawGame(ScreenInfo game)
         {
             var c = circleCollider.GetCircleShape();
-            c.DrawLines(4f, Colors.Warm);
+            c.DrawLines(4f, Colors.Warm, 1f);
         }
 
         public override bool HasLeftBounds(Rect bounds) => !bounds.OverlapShape(circleCollider.GetCircleShape());
@@ -253,9 +246,8 @@ namespace Examples.Scenes.ExampleScenes
         public override void DrawGameUI(ScreenInfo gameUi)
         {
         }
-        
+
     }
-   
     internal class Bullet : CollisionObject
     {
         private CircleCollider circleCollider;
@@ -269,6 +261,7 @@ namespace Examples.Scenes.ExampleScenes
             col.CollisionMask = new(CollisionFlags.WallFlag);
             col.CollisionMask = col.CollisionMask.Add(CollisionFlags.BoundaryFlag);
             col.CollisionLayer = CollisionFlags.BulletFlag;
+            col.BroadphaseType = BroadphaseType.Point;
             ProjectShape = true;
 
             Velocity = Rng.Instance.RandVec2(5000, 6000);
@@ -286,10 +279,6 @@ namespace Examples.Scenes.ExampleScenes
                 deadTimer -= time.Delta;
                 if (deadTimer <= 0) Kill();
             }
-        }
-        public override void FixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-        {
-            
         }
         
 
@@ -340,8 +329,9 @@ namespace Examples.Scenes.ExampleScenes
         private Rect boundingBox;
         public Rock(Vector2 pos) : base(new Transform2D(pos, 0f, new Size(Size, 0f), 1f))
         {
-            var shape = Polygon.GenerateRelative(6, 0.5f, 1f);
-            var col = new PolygonCollider(new(), shape ?? [])
+            Polygon shape = new();
+            Polygon.GenerateRelative(6, 0.5f, 1f, shape);
+            var col = new PolygonCollider(new(), shape)
             {
                 ComputeCollision = true,
                 ComputeIntersections = true,
@@ -370,10 +360,6 @@ namespace Examples.Scenes.ExampleScenes
             {
                 Transform += rotationSpeedRad * time.Delta;
             }
-        }
-        public override void FixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-        {
-            
         }
 
         public override bool HasLeftBounds(Rect bounds)
@@ -517,24 +503,17 @@ namespace Examples.Scenes.ExampleScenes
         public override void DrawGameUI(ScreenInfo gameUi)
         {
         }
-        public override void FixedUpdate(GameTime fixedTime, ScreenInfo game, ScreenInfo gameUi, ScreenInfo ui)
-        {
-            
-        }
     }
     
-
     
     public class GameObjectHandlerExample : ExampleScene
     {
         private readonly Rect boundaryRect;
-        private Font font;
+        // private Font font;
 
-        private Vector2 startPoint = new();
-        private bool segmentStarted = false;
-        private bool drawDebug = false;
-
-        // private InputDeviceType currentInputActionDeviceType = InputDeviceType.None;
+        private Vector2 startPoint;
+        private bool segmentStarted;
+        private bool drawDebug;
         
         private readonly InputAction iaSpawnRock;
         private readonly InputAction iaSpawnBall;
@@ -553,14 +532,14 @@ namespace Examples.Scenes.ExampleScenes
         
         private readonly InputActionTree inputActionTree;
 
-        private Vector2 clearAreaStartPoint = new();
-        private bool clearAreaActive = false;
+        private Vector2 clearAreaStartPoint;
+        private bool clearAreaActive;
         private readonly BitFlag clearAreaMask;
         public GameObjectHandlerExample()
         {
             Title = "Gameobject Handler Example";
 
-            font = GameloopExamples.Instance.GetFont(FontIDs.JetBrains);
+            // font = GameloopExamples.Instance.GetFont(FontIDs.JetBrains);
 
             InputActionSettings defaultSettings = new();
             
@@ -634,7 +613,12 @@ namespace Examples.Scenes.ExampleScenes
             {
                 SpawnArea.OnGameObjectRemoved += OnGameObjectDied;
             }
-            InitCollisionHandler(boundaryRect, 50, 50);
+            
+            var spatialHash = new BroadphaseSpatialHash(boundaryRect, 50, 50);
+            InitCollisionHandler(spatialHash);
+            // var dynamicSpatialHash = new BroadphaseDynamicSpatialHash(100, 100, 10000);
+            // InitCollisionHandler(dynamicSpatialHash);
+            
             SetupBoundary();
 
             clearAreaMask = new BitFlag(CollisionFlags.RockFlag);
@@ -646,7 +630,10 @@ namespace Examples.Scenes.ExampleScenes
         private void OnGameObjectDied(GameObject obj)
         {
             if (CollisionHandler == null) return;
-            if(obj is CollisionObject co) CollisionHandler.Remove(co);
+            if (obj is CollisionObject co)
+            {
+                CollisionHandler.Remove(co);
+            }
         }
 
 
@@ -709,57 +696,60 @@ namespace Examples.Scenes.ExampleScenes
                 ClearAreaCollisionObjects(clearArea, clearAreaMask);
                 clearAreaActive = false;
             }
-            
-            if (iaSpawnRock.State.Pressed)
-            {
-                for (int i = 0; i < 50; i++)
-                {
-                    var spawnPos = mousePosGame + Rng.Instance.RandVec2(0, 200);
-                    var r = new Rock(spawnPos);
-                    SpawnArea?.AddGameObject(r);
-                    CollisionHandler?.Add(r);
-                }
-            
-            }
-            if (iaSpawnBird.State.Pressed)
-            {
-                Bird b = new(mousePosGame);
-                SpawnArea?.AddGameObject(b);
-                CollisionHandler?.Add(b);
-            
-            }
-            if (iaSpawnBall.State.Down)
-            {
-                for (var i = 0; i < 10; i++)
-                {
-                    // Ball b = new(mousePosGame + ShapeRandom.RandVec2(0, 5), ShapeRandom.RandVec2() * 300, 10);
-                    // gameObjectHandler.AddAreaObject(b);
-                    var ball = new Ball(mousePosGame);
-                    SpawnArea?.AddGameObject(ball);
-                    CollisionHandler?.Add(ball);
-                }
 
-            }
-            if (iaSpawnBullet.State.Pressed)
+            if (boundaryRect.ContainsPoint(mousePosGame))
             {
-                for (var i = 0; i < 100; i++)
+                if (iaSpawnRock.State.Pressed)
                 {
-                    var bullet = new Bullet(mousePosGame);
-                    SpawnArea?.AddGameObject(bullet);
-                    CollisionHandler?.Add(bullet);
+                    for (int i = 0; i < 50; i++)
+                    {
+                        var spawnPos = mousePosGame + Rng.Instance.RandVec2(0, 200);
+                        var r = new Rock(spawnPos);
+                        SpawnArea?.AddGameObject(r);
+                        CollisionHandler?.Add(r);
+                    }
+            
                 }
-                
-            }
-            if (iaSpawnOverlapper.State.Pressed)
-            {
-                for (var i = 0; i < 3; i++)
+                if (iaSpawnBird.State.Pressed)
                 {
-                    var overlapper = new Overlapper(mousePosGame);
-                    SpawnArea?.AddGameObject(overlapper);
-                    CollisionHandler?.Add(overlapper);
+                    Bird b = new(mousePosGame);
+                    SpawnArea?.AddGameObject(b);
+                    CollisionHandler?.Add(b);
+            
                 }
+                if (iaSpawnBall.State.Down)
+                {
+                    for (var i = 0; i < 10; i++)
+                    {
+                        var ball = new Ball(mousePosGame);
+                        SpawnArea?.AddGameObject(ball);
+                        CollisionHandler?.Add(ball);
+                    }
+
+                }
+                if (iaSpawnBullet.State.Pressed)
+                {
+                    for (var i = 0; i < 100; i++)
+                    {
+                        var bullet = new Bullet(mousePosGame);
+                        SpawnArea?.AddGameObject(bullet);
+                        CollisionHandler?.Add(bullet);
+                    }
                 
+                }
+                if (iaSpawnOverlapper.State.Pressed)
+                {
+                    for (var i = 0; i < 3; i++)
+                    {
+                        var overlapper = new Overlapper(mousePosGame);
+                        SpawnArea?.AddGameObject(overlapper);
+                        CollisionHandler?.Add(overlapper);
+                    }
+                
+                }
             }
+            
+            
             
             if (iaToggleDebug.State.Pressed) { drawDebug = !drawDebug; }
 
@@ -811,7 +801,6 @@ namespace Examples.Scenes.ExampleScenes
             textFont.FontSpacing = 1f;
             textFont.ColorRgba = Colors.Warm;
             textFont.DrawTextWrapNone("Object Count", rects.top, new(0.5f, 0f));
-            
             textFont.DrawTextWrapNone($"{CollisionHandler?.Count ?? 0}", rects.bottom, new(0.5f));
         }
 
@@ -871,7 +860,8 @@ namespace Examples.Scenes.ExampleScenes
         {
             if (segmentStarted)
             {
-                CircleDrawing.DrawCircle(startPoint, 15f, Colors.Highlight);
+                var circle = new Circle(startPoint, 15f);
+                circle.Draw(Colors.Highlight);
                 Segment s = new(startPoint, mousePos);
                 s.Draw(4, Colors.Highlight);
 

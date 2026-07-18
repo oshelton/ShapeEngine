@@ -34,7 +34,9 @@ public sealed class InputSystem
     /// Event triggered when the input device type changes.
     /// </summary>
     public event Action<InputDeviceType, InputDeviceType>? OnInputDeviceChanged;
-    
+
+
+    public bool InputUsed { get; private set; } = false;
     
     /// <summary>
     /// Current <see cref="InputAction"/> based device type detected by <see cref="ActiveInputActionTreeGroup"/>.
@@ -132,7 +134,15 @@ public sealed class InputSystem
     /// </summary>
     internal void Update(float dt)
     {
-        if (ImguiEnabled && (ImGui.GetIO().WantCaptureKeyboard || ImGui.GetIO().WantCaptureMouse))
+    	if (ImguiEnabled && (ImGui.GetIO().WantCaptureKeyboard || ImGui.GetIO().WantCaptureMouse))
+        {
+        	InputUsed = false;
+            return;
+        }
+    
+        InputUsed = false;
+        
+        if (InputDeviceSelectionCooldownActive)
         {
             return;
         }
@@ -160,7 +170,7 @@ public sealed class InputSystem
         sortedInputDevices.Clear(); 
         sortedInputDevices.Add(Keyboard);
         sortedInputDevices.Add(Mouse);
-        foreach (var gamepad in GamepadManager.GetConnectedGamepads())
+        foreach (var gamepad in GamepadManager.GetAllGamepads())
         {
             sortedInputDevices.Add(gamepad);
         }
@@ -195,6 +205,7 @@ public sealed class InputSystem
                 if(!deviceTypeLocked && wasOtherDeviceUsed && !prevUsed) usedInputDevice = inputDevice.GetDeviceType();
             }
             
+            if(inputDevice.WasUsedRaw()) InputUsed = true;
         }
         
         if (usedInputDevice != InputDeviceType.None && usedInputDevice != CurrentInputDeviceType)
@@ -239,7 +250,6 @@ public sealed class InputSystem
                 }
             }
         }
-
         
     }
 

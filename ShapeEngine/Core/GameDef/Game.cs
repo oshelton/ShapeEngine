@@ -1,12 +1,14 @@
+using System.Reflection;
 using Raylib_cs;
 using ShapeEngine.Audio;
 using ShapeEngine.Color;
+using ShapeEngine.Core.Logging;
 using ShapeEngine.Core.Structs;
 using ShapeEngine.Input;
 using ShapeEngine.Screen;
+using ShapeEngine.StaticLib;
 
 namespace ShapeEngine.Core.GameDef;
-
 
 /// <summary>
 /// The core game class.
@@ -31,8 +33,6 @@ namespace ShapeEngine.Core.GameDef;
 /// <item><see cref="LoadContent"/> - Called once.</item>
 /// <item><see cref="BeginRun"/> - Called once.</item>
 /// <item><see cref="Update"/> - Called every frame with variable timing.</item>
-/// <item><see cref="FixedUpdate"/> - Called in a fixed interval with fixed timing.</item>
-/// <item><see cref="InterpolateFixedUpdate"/> - Called every frame with variable timing.</item>
 /// <item><see cref="DrawGame"/> - Called every frame.</item>
 /// <item><see cref="DrawGameUI"/> - Called every frame.</item>
 /// <item><see cref="DrawUI"/> - Called every frame.</item>
@@ -43,6 +43,23 @@ namespace ShapeEngine.Core.GameDef;
 public partial class Game
 {
     #region Public Members
+    
+    /// <summary>
+    /// The logger instance used for logging messages, warnings, and errors throughout the game.
+    /// Initialized during game construction and can be used for file and console output.
+    /// </summary>
+    /// <remarks>
+    /// If <see cref="SaveDirectory"/> is empty, logger will be created with default settings (console only).
+    /// Otherwise, it will log to both console and a log file in the save directory. (SaveDirectory/LogOutput/DefaultLog.txt)
+    /// </remarks>
+    public Logger Logger;
+
+    /// <summary>
+    /// The name of the application. Used for display and save directory purposes.
+    /// </summary>
+    public readonly string ApplicationName;
+
+
     /// <summary>
     /// Gets or sets the command-line arguments passed to the application at launch.
     /// </summary>
@@ -53,64 +70,85 @@ public partial class Game
     public string[] LaunchParams { get; protected set; } = [];
 
     /// <summary>
-    /// Gets whether the fixed physics update system is enabled.
+    /// Gets the target framerate for the fixed update loop.
+    /// Is used for calculating <see cref="FixedTimestep"/>.
     /// </summary>
-    /// <remarks>
-    /// When true, the fixed update functions will be called at the FixedPhysicsFramerate.
-    /// Fixed Update call order:
-    /// <list type="bullet">
-    /// <item><see cref="Update"/> with variable timing.</item>
-    /// <item><see cref="FixedUpdate"/> with fixed timing.</item>
-    /// <item><see cref="InterpolateFixedUpdate"/> with variable timing.</item>
-    /// <item><see cref="DrawGame"/></item>
-    /// <item><see cref="DrawGameUI"/></item>
-    /// <item><see cref="DrawUI"/></item>
-    /// </list>
-    /// Unlocked Update call order:
-    /// <list type="bullet">
-    /// <item><see cref="Update"/> with variable timing.</item>
-    /// <item><see cref="DrawGame"/></item>
-    /// <item><see cref="DrawGameUI"/></item>
-    /// <item><see cref="DrawUI"/></item>
-    /// </list>
-    /// </remarks>
-    public bool FixedPhysicsEnabled { get; private set; }
+    public int FixedFramerate { get; private set; }
 
     /// <summary>
-    /// Gets the target framerate for fixed physics updates.
+    /// Gets the time interval in seconds between fixed substeps in the fixed update loop.
     /// </summary>
     /// <remarks>
-    /// This value determines how many physics updates will be performed per second.
-    /// Higher values provide more accurate physics but require more processing power.
+    /// This value is calculated as <c>1.0 / FixedFramerate</c>.
     /// </remarks>
-    public int FixedPhysicsFramerate { get; private set; }
-
+    public double FixedTimestep { get; private set; }
+    
     /// <summary>
-    /// Gets the time interval in seconds between fixed physics updates.
+    /// Interpolation factor used to blend between the previous and current states
+    /// when rendering between fixed updates.
+    /// Also available as float via <see cref="FixedFramerateInterpolationFactorF"/> and in <see cref="ScreenInfo"/> structs.
     /// </summary>
     /// <remarks>
-    /// This value is calculated as 1.0 / FixedPhysicsFramerate and represents
-    /// the duration of each physics step in seconds.
+    /// Expected range is 0.0 (use previous state) to 1.0 (use current state).
+    /// This value is updated each frame when <see cref="FixedFramerateEnabled"/> is true and is useful
+    /// for smooth rendering when physics updates run at a different rate than rendering.
     /// </remarks>
-    public float FixedPhysicsTimestep { get; private set; }
-
+    public double FixedFramerateInterpolationFactor { get; private set; }
+    
     /// <summary>
-    /// Gets the game time information for the variable update loop.
+    /// Gets the interpolation factor used for blending between previous and current physics states
+    /// as a single-precision float.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see cref="FixedFramerateInterpolationFactor"/> cast to <see cref="float"/>.
+    /// Expected range is between 0.0f (use previous state) and 1.0f (use current state).
+    /// Useful when APIs or shaders require a float instead of a double.
+    /// </remarks>
+    public float FixedFramerateInterpolationFactorF { get; private set; }
+    
+    /// <summary>
+    /// Indicates whether fixed-timestep updates are enabled.
+    /// </summary>
+    /// <remarks>
+    /// Returns true when <see cref="FixedFramerate"/> is greater than zero,
+    /// meaning the engine will perform fixed framerate updates.
+    /// </remarks>
+    public bool FixedFramerateEnabled => FixedFramerate > 0;
+    
+    /// <summary>
+    /// Maximum allowed delta time (in seconds) for a single frame.
+    /// </summary>
+    /// <remarks>
+    /// This value is used to clamp the frame delta to avoid very large time steps
+    /// (which can destabilize physics or cause large logic jumps) when the application
+    /// experiences a hitch or is resumed after being suspended. It is set from the
+    /// framerate/engine settings and can be zero or a positive value.
+    /// Zero means no clamping is applied.
+    /// </remarks>
+    public double MaxDeltaTime { get; private set; }
+
+    
+    /// <summary>
+    /// Gets the game time information for the update loop.
+    /// This should only be used in Update methods.
+    /// Is affected by a fixed framerate or dynamic substepping.
     /// </summary>
     /// <remarks>
     /// Contains timing data such as elapsed time, delta time, and frame count
-    /// for the main game loop that runs at variable framerates.
+    /// for the main game update loop.
     /// </remarks>
-    public GameTime Time { get; private set; } = new GameTime();
-
+    public GameTime UpdateTime { get; private set; }
+    
     /// <summary>
-    /// Gets the game time information for the fixed update loop.
+    /// Time information for the main game loop.
+    /// This should always be used outside of Update methods, for instance in Draw methods.
     /// </summary>
     /// <remarks>
-    /// Contains timing data for the physics update loop that runs at a fixed timestep.
-    /// Only relevant when FixedPhysicsEnabled is true.
+    /// Contains the unmodified timing values (elapsed, delta, frame count) for the main loop.
+    /// This value is not affected by fixed-framerate interpolation or dynamic substepping and
+    /// should be used when raw, real-time timing is required.
     /// </remarks>
-    public GameTime FixedTime { get; private set; } = new GameTime();
+    public GameTime Time { get; private set; }
 
     /// <summary>
     /// Gets or sets the background color of the game window.
@@ -255,6 +293,112 @@ public partial class Game
     /// Gets the input manager for handling keyboard, mouse, and gamepad input.
     /// </summary>
     public readonly InputSystem Input;
+    
+    #endregion
+    
+    #region Dynamic Substepping
+
+    /// <summary>
+    /// Indicates whether dynamic substepping is enabled.
+    /// </summary>
+    /// <remarks>
+    /// Returns <c>true</c> when <see cref="MaxDynamicSubsteps"/> is greater than zero.
+    /// When enabled, the engine may split large frame deltas into multiple smaller update steps
+    /// to maintain stable physics and smoother simulation.
+    /// </remarks>
+    public bool DynamicSubsteppingEnabled => MaxDynamicSubsteps > 0;
+    
+    /// <summary>
+    /// Minimum allowed target framerate (in frames per second) used when dynamic substepping is active.
+    /// This value constrains how low the effective framerate may go when splitting a large frame delta
+    /// into multiple substeps.
+    /// </summary>
+    /// <remarks>
+    /// This effectively sets the maximum allowed delta time (or timestep) for each dynamic substep.
+    /// </remarks>
+    public int MinDynamicSubsteppingFramerate { get; private set; }
+
+    /// <summary>
+    /// Maximum number of dynamic substeps allowed when dynamic substepping is active.
+    /// Limits how many smaller update steps the engine may perform in a single frame to smooth out large frame deltas.
+    /// </summary>
+    /// <remarks>
+    /// The effective maximum substeps allowed is decreased by 1 every frame at least 1 substep is performed to a minimum of 1.
+    /// This prevents spiraling and ensures at least one substep per frame with <see cref="MaxDynamicTimestep"/> as delta time.
+    /// </remarks>
+    public int MaxDynamicSubsteps { get; private set; }
+    
+    /// <summary>
+    /// Maximum dynamic timestep used when performing dynamic substepping.
+    /// </summary>
+    /// <remarks>
+    /// Represents the largest allowed duration (in seconds) for an individual
+    /// dynamic substep when splitting a large frame delta into multiple updates.
+    /// Calculated from <see cref="MinDynamicSubsteppingFramerate"/> as
+    /// <c>1.0 / MinDynamicSubsteppingFramerate</c> during construction.
+    /// </remarks>
+    public double MaxDynamicTimestep {get; private set;}
+    #endregion
+    
+    #region Idle
+
+    /// <summary>
+    /// Event fired when the game's idle state changes.
+    /// </summary>
+    /// <remarks>
+    /// The boolean argument indicates the new idle state:
+    /// - <c>true</c> when the game became idle.
+    /// - <c>false</c> when the game is no longer idle.
+    /// Subscribers can use this to adjust behavior when idle (for example, apply a framerate cap or reduce updates).
+    /// </remarks>
+    public event Action<bool>? OnIdleChanged;
+    
+    /// <summary>
+    /// Time in seconds of inactivity (no input) before the game is considered idle.
+    /// Setting to 0 or less disables idle detection.
+    /// </summary>
+    /// <remarks>
+    /// When the accumulated idle timer exceeds this threshold, <see cref="IsIdle"/> may be set to true
+    /// and idle-specific behaviour (such as framerate limiting) can be applied.
+    /// </remarks>
+    public float IdleTimeThreshold;
+    
+    /// <summary>
+    /// Target framerate to cap the game to while idle.
+    /// </summary>
+    /// <remarks>
+    /// If this value is less than or equal to 0, no idle framerate limiting is applied.
+    /// When greater than 0 and the game is idle, the engine may limit updates/rendering to this value.
+    /// If <see cref="GameWindow.UnfocusedFrameRateLimit"/> is active as well, the lower of the two limits will be used.
+    /// </remarks>
+    public int IdleFrameRateLimit;
+    
+    /// <summary>
+    /// Indicates whether the game is currently considered idle.
+    /// </summary>
+    /// <remarks>
+    /// This property is set internally based on <see cref="idleTimer"/> and <see cref="IdleTimeThreshold"/>.
+    /// It is read-only to external callers.
+    /// </remarks>
+    public bool IsIdle { get; private set; }
+    
+    /// <summary>
+    /// Accumulated time in seconds since the last detected user input or activity.
+    /// </summary>
+    /// <remarks>
+    /// Resets to 0 when activity is detected. Used to determine when the idle threshold is reached.
+    /// </remarks>
+    private float idleTimer = 0f;
+    
+    /// <summary>
+    /// Determines if the idle framerate cap should be active.
+    /// </summary>
+    /// <returns>True when <see cref="IdleFrameRateLimit"/> is greater than 0 and the game is currently idle.</returns>
+    private bool IsIdleFrameRateLimitActive()
+    {
+        return IdleFrameRateLimit > 0 && IsIdle;
+    }
+
     #endregion
 
     #region Private Members
@@ -269,15 +413,12 @@ public partial class Game
     private readonly List<ShapeFlash> shapeFlashes = [];
     private readonly List<DeferredInfo> deferred = [];
 
-    private float physicsAccumulator;
+    private double fixedTimestepAccumulator;
 
     private List<ScreenTexture>? customScreenTextures;
     #endregion
 
     #region Constructor
-
-    
-    
     /// <summary>
     /// Gets the singleton instance of the current game.
     /// </summary>
@@ -316,21 +457,124 @@ public partial class Game
     /// </remarks>
     /// <param name="gameSettings">The settings for the game, including fixed framerate, screen texture mode, and rendering options.</param>
     /// <param name="windowSettings">The settings for the window, including size, position, and display properties.</param>
+    /// <param name="framerateSettings">The settings for framerate control, including fixed timestep and frame rate limits.</param>
     /// <param name="inputSettings">The settings for input devices, including keyboard, mouse, and gamepad configurations.</param>
-    public Game(GameSettings gameSettings, WindowSettings windowSettings, InputSettings inputSettings)
+    public Game(GameSettings gameSettings, WindowSettings windowSettings, FramerateSettings framerateSettings,  InputSettings inputSettings)
     {
         if (instance != null) 
             throw new InvalidOperationException("Game instance already exists! You should only create one instance of the game class per application!");
         
         instance = this;
         
-        #if DEBUG
+#if DEBUG
         DebugMode = true;
         ReleaseMode = false;
 #endif
+        
+        //This sets the current directory to the executable's folder, enabling double-click launches.
+        //without this, the executable has to be launched from the command line
+        if (IsOSX())
+        {
+            string exeDir = AppContext.BaseDirectory;
+            if (!string.IsNullOrEmpty(exeDir))
+            {
+                Directory.SetCurrentDirectory(exeDir);
+            }
+            else Console.WriteLine("Failed to set current directory to executable's folder in macos.");
+        }
 
+        ApplicationName = gameSettings.ApplicationName;
+        if (gameSettings.SaveDirectory != null && ApplicationName.Length > 0)
+        {
+            var folderPath = Environment.GetFolderPath((Environment.SpecialFolder)gameSettings.SaveDirectory);
+            var absolutePath = Path.Combine(folderPath, gameSettings.ApplicationName);
+            var dir = ShapeFileManager.CreateDirectory(absolutePath, false);
+            if (dir != null)
+            {
+                SaveDirectory = dir;
+                
+                if (ReleaseMode)
+                {
+                    var logPath = Path.Combine(absolutePath, "LogOutput/DefaultLog.txt");
+                    var loggerSettings = LoggerSettings.LogToFileAndConsole(LogLevel.Info, logPath);
+                    Logger = new Logger(loggerSettings);
+                    Logger.LogInfo($"Logger initialized in release mode. Log file: {logPath}");
+                }
+                else
+                {
+                    Logger = new Logger(LoggerSettings.Default);
+                    Logger.LogInfo("Logger initialized in debug mode. No log file will be created.");
+                }
+                
+                
+                Logger.LogInfo($"Save directory set to: {SaveDirectoryPath}.");
+                
+                var savegameDirPath = Path.Combine(dir.FullName, "Savegames");
+                var savegameDir = ShapeFileManager.CreateDirectory(savegameDirPath, false);
+                if (savegameDir != null)
+                {
+                    SavegameDirectory = savegameDir;
+                    Logger.LogInfo($"Savegame directory set to: {SavegameDirectoryPath}.");
+                    var backupDirPath = Path.Combine(dir.FullName, "Backups");
+                    var backupDir = ShapeFileManager.CreateDirectory(backupDirPath, false);
+                    if (backupDir != null)
+                    {
+                        SavegameBackupDirectory = backupDir;
+                        Logger.LogInfo($"Savegame backup directory set to: {SavegameBackupDirectoryPath}.");
+                    }
+                    else
+                    {
+                        SavegameBackupDirectory = new (string.Empty);
+                        Logger.LogWarning("Failed to create save backup directory! SaveBackupDirectory will be empty.");
+                    } 
+                }
+                else
+                {
+                    SavegameDirectory = new(string.Empty);
+                    SavegameBackupDirectory = new(string.Empty);
+                    Logger.LogWarning("Failed to create SavegameDirectory. SavegameDirectory and SaveBackupDirectory will be empty.");
+                } 
+                
+            }
+            else
+            {
+                SaveDirectory = new(string.Empty);
+                SavegameDirectory = new(string.Empty);
+                SavegameBackupDirectory = new(string.Empty);
+                Logger = new Logger(LoggerSettings.Default);
+                if (ReleaseMode)
+                {
+                    Logger.LogInfo("Logger initialized in release mode. No valid save directory set. No log file created.");
+                }
+                else
+                {
+                    Logger.LogInfo("Logger initialized in debug mode. No log file will be created.");
+                }
+                
+                Logger.LogWarning("No save directory set! SaveDirectory will be empty. ");
+                Logger.LogWarning("SavegameDirectory and SavegameBackupDirectory will be empty.");
+            }
+        }
+        else
+        {
+            SaveDirectory = new(string.Empty);
+            SavegameDirectory = new(string.Empty);
+            SavegameBackupDirectory = new(string.Empty);
+            Logger = new Logger(LoggerSettings.Default);
+            if (ReleaseMode)
+            {
+                Logger.LogInfo("Logger initialized in release mode. No valid save directory set. No log file created.");
+            }
+            else
+            {
+                Logger.LogInfo("Logger initialized in debug mode. No log file will be created.");
+            }
+            Logger.LogWarning("No save directory set! SaveDirectory will be empty.");
+            Logger.LogWarning("SavegameDirectory and SavegameBackupDirectory will be empty.");
+        }
+        
         // this.DevelopmentDimensions = gameSettings.DevelopmentDimensions;
-        Window = new(windowSettings);
+        Window = new(windowSettings, framerateSettings);
         Window.OnWindowSizeChanged += ResolveOnWindowSizeChanged;
         Window.OnWindowPositionChanged += ResolveOnWindowPositionChanged;
         Window.OnMonitorChanged += ResolveOnMonitorChanged;
@@ -338,8 +582,7 @@ public partial class Game
         Window.OnMouseEnabledChanged += ResolveOnMouseEnabledChanged;
         Window.OnMouseEnteredScreen += ResolveOnMouseEnteredScreen;
         Window.OnMouseLeftScreen += ResolveOnMouseLeftScreen;
-
-
+        
         Window.OnWindowFocusChanged += ResolveOnWindowFocusChanged;
         Window.OnWindowFullscreenChanged += ResolveOnWindowFullscreenChanged;
         Window.OnWindowMaximizeChanged += ResolveOnWindowMaximizeChanged;
@@ -347,24 +590,36 @@ public partial class Game
         Window.OnWindowHiddenChanged += ResolveOnWindowHiddenChanged;
         Window.OnWindowTopmostChanged += ResolveOnWindowTopmostChanged;
 
-        AudioDevice = new AudioDevice();
-
-        var fixedFramerate = gameSettings.FixedFramerate;
-        if (fixedFramerate <= 0)
+        UpdateGamepadMappings(inputSettings);
+        
+        IdleTimeThreshold = framerateSettings.IdleTimeThreshold;
+        IdleFrameRateLimit = framerateSettings.IdleFrameRateLimit;
+        MaxDeltaTime = framerateSettings.MaxDeltaTime;
+        
+        MaxDynamicSubsteps = framerateSettings.MaxDynamicSubsteps;
+        curDynamicSubsteps = MaxDynamicSubsteps;
+        MinDynamicSubsteppingFramerate = framerateSettings.MinDynamicSubsteppingFramerate;
+        MaxDynamicTimestep = 1.0 / MinDynamicSubsteppingFramerate;
+        
+        if (framerateSettings.FixedFramerate > 0)
         {
-            FixedPhysicsFramerate = -1;
-            FixedPhysicsTimestep = -1;
-            FixedPhysicsEnabled = false;
+            FixedFramerate = framerateSettings.FixedFramerate;
+            FixedTimestep = 1.0 / FixedFramerate;
         }
         else
         {
-            if (fixedFramerate < 30)
-                fixedFramerate = 30;
-            FixedPhysicsFramerate = fixedFramerate;
-            FixedPhysicsTimestep = 1f / FixedPhysicsFramerate;
-            FixedPhysicsEnabled = true;
+            FixedFramerate = 0;
+            FixedTimestep = 0;
         }
 
+        FixedFramerateInterpolationFactor = 1.0;
+        FixedFramerateInterpolationFactorF = 1f;
+        
+        UpdateTime = new GameTime(0,0,0, FixedFramerateEnabled);
+        Time = new GameTime(0,0,0,false);
+        
+        AudioDevice = new AudioDevice();
+        
         curCamera = basicCamera;
         curCamera.Activate();
         curCamera.SetSize(Window.CurScreenSize);
@@ -396,29 +651,75 @@ public partial class Game
 
         GameScreenInfo = gameTexture.GameScreenInfo;
         GameUiScreenInfo = gameTexture.GameUiScreenInfo;
-        UIScreenInfo = new(Window.ScreenArea, mousePosUI);
+        UIScreenInfo = new(Window.ScreenArea, mousePosUI, true);
 
         Input = new InputSystem(inputSettings);
         Input.OnInputDeviceChanged += ResolveOnInputDeviceChanged;
         Input.GamepadManager.OnGamepadConnectionChanged += ResolveOnGamepadConnectionChanged;
         Input.GamepadManager.OnGamepadClaimed += ResolveOnGamepadClaimed;
         Input.GamepadManager.OnGamepadFreed += ResolveOnGamepadFreed;
-        
-        //This sets the current directory to the executable's folder, enabling double-click launches.
-        //without this, the executable has to be launched from the command line
-        if (IsOSX())
-        {
-            string exeDir = AppContext.BaseDirectory;
-            if (!string.IsNullOrEmpty(exeDir))
-            {
-                Directory.SetCurrentDirectory(exeDir);
-            }
-            else
-                Console.WriteLine("Failed to set current directory to executable's folder in macos.");
-        }
 
         ImguiEnabled = gameSettings.ImguiEnabled;
     }
+
+    private void UpdateGamepadMappings(InputSettings inputSettings)
+    {
+        if (inputSettings.LoadEmbeddedGamepadMappings)
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream("ShapeEngine.gamecontrollerdb.txt"); //gamecontrollerdb.txt is embedded in the assembly (file -> properties -> EmbeddedResource)
+            if (stream != null)
+            {
+                using var reader = new StreamReader(stream);
+                var mapping = reader.ReadToEnd();
+                if (mapping.Length > 0)
+                {
+                    Console.WriteLine($"Embedded Gamepad mappings loaded and applied with {mapping.Length} characters.");
+                    Raylib.SetGamepadMappings(mapping);
+                }
+                else 
+                {
+                    Console.WriteLine("No gamepad mappings found in embedded resource.");
+                }
+            }
+        }
+        else
+        {
+            if (inputSettings.GamepadMappingsFilePath is { Length: > 0 })
+            {
+                var loadedMapping = ShapeFileManager.LoadText(inputSettings.GamepadMappingsFilePath);
+                if (loadedMapping.Length > 0)
+                {
+                    Console.WriteLine($"Gamepad mappings loaded from file '{inputSettings.GamepadMappingsFilePath}' with {loadedMapping.Length} characters.");
+                    Raylib.SetGamepadMappings(loadedMapping);
+                }
+                else
+                {
+                    Console.WriteLine($"Empty Gamepad mappings file loaded from '{inputSettings.GamepadMappingsFilePath}'! No mappings applied.");
+                }
+            }
+        }
+        
+        if (inputSettings.GamepadMappings != null && inputSettings.GamepadMappings.Count > 0)
+        {
+            string extraMapping = "";
+            foreach (var mappingString in inputSettings.GamepadMappings)
+            {
+                extraMapping += mappingString;
+            }
+
+            if (extraMapping.Length > 0)
+            {
+                Console.WriteLine($"Additional gamepad mappings applied with {extraMapping.Length} characters.");
+                Raylib.SetGamepadMappings(extraMapping);
+            }
+            else
+            {
+                Console.WriteLine("All additional gamepad mappings are empty! No mappings applied.");
+            }
+        }
+    }
+    
     #endregion
 
     #region Custom Screen Textures
@@ -497,11 +798,11 @@ public partial class Game
     /// <param name="gameInfo">Information about the game screen area.</param>
     /// <param name="gameUiInfo">Information about the game UI screen area.</param>
     /// <param name="uiInfo">Information about the general UI screen area.</param>
-
     protected virtual void UpdateCursor(float dt, ScreenInfo gameInfo, ScreenInfo gameUiInfo, ScreenInfo uiInfo)
     {
         
     }
+    
     /// <summary>
     /// Draws the cursor in the game world space.
     /// </summary>
@@ -514,6 +815,7 @@ public partial class Game
     {
         
     }
+    
     /// <summary>
     /// Draws the cursor on the game UI. This method is called during the UI rendering phase when the mouse is on the screen.
     /// </summary>
@@ -522,11 +824,11 @@ public partial class Game
     /// This is a virtual method intended to be overridden by derived classes to implement custom cursor rendering.
     /// The base implementation does not draw anything.
     /// </remarks>
-
     protected virtual void DrawCursorGameUi(ScreenInfo gameUiInfo)
     {
         
     }
+    
     /// <summary>
     /// Draws cursor UI elements on the screen.
     /// </summary>
@@ -535,7 +837,6 @@ public partial class Game
     /// This is a virtual method that can be overridden by derived classes to implement custom cursor drawing.
     /// It's called during the rendering process when the mouse is detected on the screen.
     /// </remarks>
-
     protected virtual void DrawCursorUi(ScreenInfo uiInfo)
     {
         
@@ -715,7 +1016,3 @@ public partial class Game
     }
     #endregion
 }
-
-
-
-

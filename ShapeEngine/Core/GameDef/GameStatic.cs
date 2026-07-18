@@ -11,6 +11,7 @@ public partial class Game
     /// <remarks>
     /// This property returns the base directory of the current application domain.
     /// It is equivalent to the value returned by <see cref="System.IO.Directory.GetCurrentDirectory"/> method.
+    /// If you need directories for save games, logs, or other files, you can use <see cref="ShapeFileManager"/> class.
     /// </remarks>
     public static readonly string CURRENT_DIRECTORY = AppDomain.CurrentDomain.BaseDirectory;
 
@@ -74,46 +75,7 @@ public partial class Game
         string exeDir = AppContext.BaseDirectory.Replace('\\', '/');
         return exeDir.Contains(".app/Contents/MacOS/");
     }
-
-    /// <summary>
-    /// Compares two lists for equality. The lists must contain elements of the same type that implement the IEquatable interface.
-    /// </summary>
-    /// <typeparam name="T">The type of elements in the lists. Must implement the IEquatable interface.</typeparam>
-    /// <param name="a">The first list to compare.</param>
-    /// <param name="b">The second list to compare.</param>
-    /// <returns>
-    /// Returns true if both lists are not null, have the same count, and all corresponding elements in the lists are equal. 
-    /// Returns false otherwise.
-    /// </returns>
-    public static bool IsEqual<T>(List<T>? a, List<T>? b) where T : IEquatable<T>
-    {
-        if (a == null || b == null) return false;
-        if (a.Count != b.Count) return false;
-        for (var i = 0; i < a.Count; i++)
-        {
-            if (!a[i].Equals(b[i])) return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Computes and returns the hash code for a generic collection of elements.
-    /// </summary>
-    /// <typeparam name="T">The type of elements in the collection.</typeparam>
-    /// <param name="collection">The collection of elements to compute the hash code for.</param>
-    /// <returns>The computed hash code for the collection.</returns>
-    public static int GetHashCode<T>(IEnumerable<T> collection)
-    {
-        HashCode hash = new();
-        foreach (var element in collection)
-        {
-            hash.Add(element);
-        }
-
-        return hash.ToHashCode();
-    }
-
+    
     /// <summary>
     /// Gets an item from a collection at the specified index, wrapping around if the index is out of range.
     /// </summary>
@@ -127,4 +89,25 @@ public partial class Game
         return collection[i];
     }
 
+    /// <summary>
+    /// Attempts to parse a string value into the specified enum type.
+    /// </summary>
+    /// <typeparam name="TEnum">The enum type to parse the string value into.</typeparam>
+    /// <param name="value">The string value to parse.</param>
+    /// <param name="result">When this method returns, contains the parsed enum value if the parsing succeeded, or the default value if parsing failed.</param>
+    /// <returns>True if the string was successfully parsed into an enum value; otherwise, false.</returns>
+    public static bool TryParseEnum<TEnum>(string value, out TEnum result) where TEnum : struct
+    {
+        if (typeof(TEnum).IsEnum)
+        {
+            if (Enum.TryParse(value, true, out TEnum parsedValue))
+            {
+                result = parsedValue;
+                return true;
+            }
+        }
+
+        result = default(TEnum);
+        return false;
+    }
 }

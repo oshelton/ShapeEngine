@@ -1,0 +1,42 @@
+name: .NET Publish Examples
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  Build:
+    env:
+      dotnet-version: "8.0"
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            runtime: win-x64
+          - os: ubuntu-latest
+            runtime: linux-x64
+          - os: macos-latest
+            runtime: osx-arm64
+          - os: macos-15-intel
+            runtime: osx-x64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.dotnet-version }}.x
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Publish Examples
+        run: dotnet publish --sc -r ${{ matrix.runtime }} ./ShapeEngine.sln
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v4.5.0
+        with:
+          name: ${{ matrix.runtime }}-Examples
+          path: ./Examples/bin/Release/net${{ env.dotnet-version }}/${{ matrix.runtime }}/publish
