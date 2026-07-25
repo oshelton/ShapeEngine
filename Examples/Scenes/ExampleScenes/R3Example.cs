@@ -10,7 +10,7 @@ using ShapeEngine.Timing.R3;
 
 namespace Examples.Scenes.ExampleScenes;
 
-public class R3DemoScene : ExampleScene
+public class R3Example : ExampleScene
 {
     private readonly Circle circle;
     private readonly CompositeDisposable disposables = new CompositeDisposable();
@@ -18,9 +18,9 @@ public class R3DemoScene : ExampleScene
     private GameTime currentGameTime;
     private ColorRgba currentColor = ColorRgba.White;
 
-    public R3DemoScene() : base()
+    public R3Example() : base()
     {
-        Title = "R3 Demo Window Scene";
+        Title = "R3";
         Description = "A simple example of using R3 with ShapeEngine";
 
         float radius = 450 / 2;

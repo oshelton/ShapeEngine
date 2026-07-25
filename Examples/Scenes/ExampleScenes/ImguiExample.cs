@@ -6,7 +6,7 @@ using ShapeEngine.Input;
 
 namespace Examples.Scenes.ExampleScenes;
 
-public class ImguiDemoScene : ExampleScene
+public class ImguiExample : ExampleScene
 {
     private readonly InputAction increaseFontScaleAction;
     private readonly InputAction decreaseFontScaleAction;
@@ -17,10 +17,10 @@ public class ImguiDemoScene : ExampleScene
     private float currentFontScale = 1.0f;
     private string instructions = "";
 
-    public ImguiDemoScene() : base()
+    public ImguiExample() : base()
     {
-        Title = "ImGui Demo Window Scene";
-        Description = "A window presenting the ImGui demo window";
+        Title = "ImGui";
+        Description = "Presents the ImGui demo window";
 
         var increaseScaleKb = new InputTypeKeyboardButton(ShapeKeyboardButton.PERIOD);
         increaseFontScaleAction = new(InputSystem.NextAccessTag, new InputActionSettings(), increaseScaleKb);
