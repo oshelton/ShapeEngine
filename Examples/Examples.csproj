@@ -32,6 +32,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Gum.raylib" Version="2026.7.22.1" />
+      <PackageReference Include="Gum.Themes.Neon.Raylib" Version="2026.7.22.1" />
+    </ItemGroup>
    
     <!-- For copying the Resource Directory to the Output Directory -->
     <!--

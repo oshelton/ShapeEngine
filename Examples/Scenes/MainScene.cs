@@ -65,6 +65,7 @@ namespace Examples.Scenes
 
             examples.Add(new ImguiExample());
             examples.Add(new R3Example());
+            examples.Add(new GumExample());
             
             buttonContainer = new ControlNodeContainer
             {

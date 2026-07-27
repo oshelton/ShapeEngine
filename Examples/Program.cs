@@ -5,6 +5,8 @@ using ShapeEngine.Input;
 namespace Examples;
 public static class Program
 {
+    // STAThread is required if you deploy using NativeAOT on Windows - See https://github.com/raylib-cs/raylib-cs/issues/301
+    [STAThread]
     public static void Main(string[] args)
     {
         
@@ -16,15 +18,15 @@ public static class Program
             Topmost = false,
             FullscreenAutoRestoring = true,
             WindowBorder = WindowBorder.Resizabled,
-            WindowMinSize = new(480, 270),
-            WindowSize = new(960, 540),
+            WindowMinSize = new(1280, 720),
+            WindowSize = new(1280, 720),
             Monitor = 0,
             Vsync = VsyncMode.Disabled,
             WindowOpacity = 1f,
             MouseEnabled = true,
             MouseVisible = false,
             Msaa4x = true,
-            HighDPI = true,
+            HighDPI = false,
             FramebufferTransparent = false
         };
 
