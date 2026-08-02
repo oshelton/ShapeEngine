@@ -22,6 +22,26 @@ internal static class NativeMethods
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_SHOWWINDOW = 0x0040;
 
+    /// <summary>
+    /// The minimum interval Windows allows for <see cref="SetTimer"/>; smaller values are silently
+    /// clamped up to this by the OS.
+    /// </summary>
+    public const uint USER_TIMER_MINIMUM = 0x0000000A;
+
+    public delegate void TimerProc(IntPtr hWnd, uint uMsg, UIntPtr idEvent, uint dwTime);
+
+    /// <summary>
+    /// Creates a timer that is not associated with a window. When <paramref name="hWnd"/> is
+    /// <see cref="IntPtr.Zero"/>, <paramref name="lpTimerFunc"/> is invoked directly by whichever
+    /// thread's message loop processes the resulting WM_TIMER message — bypassing any window
+    /// procedure (and, for an Avalonia app, its Dispatcher) entirely.
+    /// </summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern UIntPtr SetTimer(IntPtr hWnd, UIntPtr nIDEvent, uint uElapse, TimerProc? lpTimerFunc);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool KillTimer(IntPtr hWnd, UIntPtr uIDEvent);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
 

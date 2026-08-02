@@ -7,8 +7,6 @@ using Avalonia.Metadata;
 using Avalonia.Platform;
 using Avalonia.VisualTree;
 using AvaloniaShapeEngineExample.Win32;
-using R3;
-using R3.Avalonia;
 using Raylib_cs;
 using ShapeEngine.Core;
 using ShapeEngine.Core.GameDef;
@@ -18,8 +16,9 @@ namespace AvaloniaShapeEngineExample;
 /// <summary>
 /// Hosts a ShapeEngine <see cref="GameDef.Game"/>'s raylib window as a native child window
 /// embedded in the Avalonia visual tree, modeled on LibVLCSharp's VideoView. Windows-only.
-/// Everything runs on the Avalonia UI thread: the game is constructed here, and ticked once per
-/// Avalonia-rendered frame via an R3 <see cref="AvaloniaRenderingFrameProvider"/> subscription.
+/// Everything runs on the Avalonia UI thread: the game is constructed here, and ticked via a raw
+/// Win32 <see cref="NativeMethods.SetTimer"/> callback — delivered by the same thread's message
+/// loop, but entirely independent of Avalonia's own Dispatcher.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public class ShapeEngineView : NativeControlHost
@@ -49,6 +48,13 @@ public class ShapeEngineView : NativeControlHost
     public Game? Game { get; private set; }
 
     /// <summary>
+    /// Target interval between <see cref="Game.Tick"/> calls, in milliseconds. Windows clamps this
+    /// up to <see cref="NativeMethods.USER_TIMER_MINIMUM"/> (10ms, i.e. ~100Hz) regardless of what's
+    /// requested.
+    /// </summary>
+    public uint TickIntervalMs { get; set; } = NativeMethods.USER_TIMER_MINIMUM;
+
+    /// <summary>
     /// Content overlaid on top of the embedded raylib surface. Native child windows always
     /// composite above Avalonia-drawn pixels in the same screen area, so this is rendered via a
     /// separate transparent floating <see cref="Window"/> positioned over this control's bounds —
@@ -63,7 +69,8 @@ public class ShapeEngineView : NativeControlHost
 
     private TopLevel? _topLevel;
     private IntPtr _raylibHwnd;
-    private IDisposable? _frameSubscription;
+    private NativeMethods.TimerProc? _timerProc;
+    private UIntPtr _timerId;
     private bool _closed;
 
     private Window? _floatingContent;
@@ -131,7 +138,11 @@ public class ShapeEngineView : NativeControlHost
             ?? throw new InvalidOperationException($"{nameof(ShapeEngineView)} must be attached to a TopLevel.");
 
         ReparentRaylibWindow(hostHandle.Handle);
-        _frameSubscription = Observable.EveryUpdate(new AvaloniaRenderingFrameProvider(_topLevel)).Subscribe(_ => OnFrame());
+
+        // Keep a strong reference to the delegate: SetTimer only holds a raw function pointer, so
+        // an unheld delegate would be free to be GC'd out from under the native callback.
+        _timerProc = OnTimerTick;
+        _timerId = NativeMethods.SetTimer(IntPtr.Zero, UIntPtr.Zero, TickIntervalMs, _timerProc);
 
         return hostHandle;
     }
@@ -166,6 +177,8 @@ public class ShapeEngineView : NativeControlHost
 
     private void OnControlSizeChanged(object? sender, SizeChangedEventArgs e) => ResizeRaylibChild();
 
+    private void OnTimerTick(IntPtr hWnd, uint uMsg, UIntPtr idEvent, uint dwTime) => OnFrame();
+
     private void OnFrame()
     {
         if (Game is null || _closed) return;
@@ -183,8 +196,12 @@ public class ShapeEngineView : NativeControlHost
         if (_closed) return;
         _closed = true;
 
-        _frameSubscription?.Dispose();
-        _frameSubscription = null;
+        if (_timerId != UIntPtr.Zero)
+        {
+            NativeMethods.KillTimer(IntPtr.Zero, _timerId);
+            _timerId = UIntPtr.Zero;
+        }
+        _timerProc = null;
 
         Game?.EndGameloop();
         Raylib.CloseWindow();

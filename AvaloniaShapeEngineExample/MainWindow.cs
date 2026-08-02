@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Markup.Declarative;
-using Avalonia.Media;
 using Raylib_cs;
 using ShapeEngine.Core;
 using ShapeEngine.Core.GameDef;
