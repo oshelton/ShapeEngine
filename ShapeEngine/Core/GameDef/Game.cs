@@ -287,12 +287,22 @@ public partial class Game
     /// <returns>The current ScreenTexture instance used by the game.</returns>
     public ScreenTexture GetGameTexture() => gameTexture;
     
-    public bool ImguiEnabled { get; } 
+    public bool ImguiEnabled { get; }
 
     /// <summary>
     /// Gets the input manager for handling keyboard, mouse, and gamepad input.
     /// </summary>
     public readonly InputSystem Input;
+
+    /// <summary>
+    /// When set to false, <see cref="Tick"/> skips polling <see cref="Input"/> (keyboard, mouse,
+    /// and gamepad) entirely. Defaults to true.
+    /// </summary>
+    /// <remarks>
+    /// Useful when the window doesn't receive normal OS focus/input messages — e.g. embedded as
+    /// a native child inside another UI framework — and input is driven through other means.
+    /// </remarks>
+    public bool InputEnabled { get; set; } = true;
     
     #endregion
     

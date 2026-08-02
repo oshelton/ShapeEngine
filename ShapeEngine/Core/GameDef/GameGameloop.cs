@@ -20,6 +20,9 @@ public partial class Game
     private int fps;
     private long frameDeltaNanoSeconds;
     private int curDynamicSubsteps;
+    private Stopwatch frameWatch = null!;
+    private long nanosecPerTick;
+    private long elapsedNanoSec;
     // private double prevDynamicSubsteppingTargetTimestep;
     
     /// <summary>
@@ -50,8 +53,17 @@ public partial class Game
     /// </remarks>
     public double FrameTime { get; private set; }
 
-    private void StartGameloop()
+    /// <summary>
+    /// Gets whether the game has requested to quit (e.g. via <see cref="Quit"/> or the OS window close request).
+    /// </summary>
+    public bool IsQuitRequested => quit;
+
+    public void StartGameloop()
     {
+        frameWatch = new Stopwatch();
+        frameWatch.Start();
+        nanosecPerTick = ShapeMath.NanoSecondsInOneSecond / Stopwatch.Frequency;
+
         Input.Keyboard.OnButtonPressed += KeyboardButtonPressed;
         Input.Keyboard.OnButtonReleased += KeyboardButtonReleased;
         Input.Mouse.OnButtonPressed += MouseButtonPressed;
@@ -76,48 +88,55 @@ public partial class Game
 
     private void RunGameloop()
     {
-        Stopwatch frameWatch = new();
-        
-        // Start the stopwatch before the loop to prevent a 0 delta on the first frame.
-        // A 0 delta would cause division by zero in FPS calculation and could break game logic that depends on delta time.
-        frameWatch.Start();
-        long frequency = Stopwatch.Frequency;
-        long nanosecPerTick = ShapeMath.NanoSecondsInOneSecond / frequency;
-        
         while (!quit)
         {
-            frameDeltaNanoSeconds = frameWatch.ElapsedTicks * nanosecPerTick;
+            Tick();
+            if (!quit) ApplyFramePacing();
+        }
+    }
 
-            if (MaxDeltaTime > 0.0)
-            {
-                long maxFrameDeltaNanoSeconds = ShapeMath.SecondsToNanoSeconds(MaxDeltaTime);
-                if(frameDeltaNanoSeconds > maxFrameDeltaNanoSeconds) frameDeltaNanoSeconds = maxFrameDeltaNanoSeconds;
-            }
-            
-            frameDelta = frameDeltaNanoSeconds / (double)ShapeMath.NanoSecondsInOneSecond;
-            
-            // Clamp frameDelta to a small minimum to avoid division by zero or extremely large FPS values
-            const double minFrameDelta = 1e-6;
-            double safeFrameDelta = frameDelta < minFrameDelta ? minFrameDelta : frameDelta;
-            fps = (int)Math.Ceiling(1.0 / safeFrameDelta);
-            
-            frameWatch.Restart();
-            
-            if (Raylib.WindowShouldClose())
-            {
-                Quit();
-                continue;
-            }
+    /// <summary>
+    /// Runs a single frame of the game loop: input, timing, update, and draw.
+    /// Does not include the target-framerate pacing wait performed by the standalone
+    /// <see cref="RunGameloop"/> loop — external drivers (e.g. an Avalonia-hosted render
+    /// loop) are expected to control their own frame pacing instead.
+    /// </summary>
+    public void Tick()
+    {
+        frameDeltaNanoSeconds = frameWatch.ElapsedTicks * nanosecPerTick;
 
-            Time = Time.Tick(frameDelta, false);
-            var dt = (float)frameDelta;
+        if (MaxDeltaTime > 0.0)
+        {
+            long maxFrameDeltaNanoSeconds = ShapeMath.SecondsToNanoSeconds(MaxDeltaTime);
+            if(frameDeltaNanoSeconds > maxFrameDeltaNanoSeconds) frameDeltaNanoSeconds = maxFrameDeltaNanoSeconds;
+        }
 
-            Window.Update(dt);
-            AudioDevice.Update(dt, curCamera);
+        frameDelta = frameDeltaNanoSeconds / (double)ShapeMath.NanoSecondsInOneSecond;
 
-            ReactiveFrameProvider.Update.Tick();
-            ReactiveTimeProvider.Update.Tick(Time);
+        // Clamp frameDelta to a small minimum to avoid division by zero or extremely large FPS values
+        const double minFrameDelta = 1e-6;
+        double safeFrameDelta = frameDelta < minFrameDelta ? minFrameDelta : frameDelta;
+        fps = (int)Math.Ceiling(1.0 / safeFrameDelta);
 
+        frameWatch.Restart();
+
+        if (Raylib.WindowShouldClose())
+        {
+            Quit();
+            return;
+        }
+
+        Time = Time.Tick(frameDelta, false);
+        var dt = (float)frameDelta;
+
+        Window.Update(dt);
+        AudioDevice.Update(dt, curCamera);
+
+        ReactiveFrameProvider.Update.Tick();
+        ReactiveTimeProvider.Update.Tick(Time);
+
+        if (InputEnabled)
+        {
             Input.Update(dt);
 
             //Mouse Movement System
@@ -128,115 +147,103 @@ public partial class Game
                     Window.MoveMouse(ChangeMousePos(dt, Window.MousePosition, Window.ScreenArea));
                 }
             }
+        }
 
-            //Idle Detection System
-            if (IdleTimeThreshold > 0f)
+        //Idle Detection System
+        if (IdleTimeThreshold > 0f)
+        {
+            if (Input.InputUsed)
             {
-                if (Input.InputUsed)
-                {
-                    //reset timer
-                    if (idleTimer > 0f)
-                    {
-                        idleTimer = 0f;
-                    }
-
-                    if (IsIdle)
-                    {
-                        IsIdle = false;
-                        OnIdleChanged?.Invoke(false);
-                    }
-                    
-                }
-                else
-                {
-                    if (idleTimer <= 0f && !IsIdle)
-                    {
-                        idleTimer = IdleTimeThreshold;
-                    }
-                }
-
+                //reset timer
                 if (idleTimer > 0f)
                 {
-                    idleTimer -= dt;
-                    if (idleTimer <= 0f)
-                    {
-                        IsIdle = true;
-                        OnIdleChanged?.Invoke(true);
-                    }
+                    idleTimer = 0f;
                 }
-            }
-            else IsIdle = false;
-            
-            var mousePosUI = Window.MousePosition;
-            gameTexture.Update(dt, Window.CurScreenSize, mousePosUI, Paused);
 
-            if (customScreenTextures is { Count: > 0 })
-            {
-                for (var i = 0; i < customScreenTextures.Count; i++)
+                if (IsIdle)
                 {
-                    customScreenTextures[i].Update(dt, Window.CurScreenSize, mousePosUI, Paused);
+                    IsIdle = false;
+                    OnIdleChanged?.Invoke(false);
+                }
+
+            }
+            else
+            {
+                if (idleTimer <= 0f && !IsIdle)
+                {
+                    idleTimer = IdleTimeThreshold;
                 }
             }
-            
-            if (!Paused)
+
+            if (idleTimer > 0f)
             {
-                UpdateFlashes(dt);
+                idleTimer -= dt;
+                if (idleTimer <= 0f)
+                {
+                    IsIdle = true;
+                    OnIdleChanged?.Invoke(true);
+                }
             }
-            
-            ResolveHandleInput();
-            
-            if (FixedFramerate > 0)//fixed update loop
+        }
+        else IsIdle = false;
+
+        var mousePosUI = Window.MousePosition;
+        gameTexture.Update(dt, Window.CurScreenSize, mousePosUI, Paused);
+
+        if (customScreenTextures is { Count: > 0 })
+        {
+            for (var i = 0; i < customScreenTextures.Count; i++)
+            {
+                customScreenTextures[i].Update(dt, Window.CurScreenSize, mousePosUI, Paused);
+            }
+        }
+
+        if (!Paused)
+        {
+            UpdateFlashes(dt);
+        }
+
+        ResolveHandleInput();
+
+        if (FixedFramerate > 0)//fixed update loop
+        {
+            fixedTimestepAccumulator += frameDelta;
+            while (fixedTimestepAccumulator >= FixedTimestep)
+            {
+                UpdateTime = UpdateTime.Tick(FixedTimestep, true);
+                ResolveUpdate();
+                fixedTimestepAccumulator -= FixedTimestep;
+            }
+            FixedFramerateInterpolationFactor = fixedTimestepAccumulator / FixedTimestep;
+            FixedFramerateInterpolationFactorF = (float)FixedFramerateInterpolationFactor;
+        }
+        else//open update loop
+        {
+            //Dynamic Substepping
+            if (DynamicSubsteppingEnabled)
             {
                 fixedTimestepAccumulator += frameDelta;
-                while (fixedTimestepAccumulator >= FixedTimestep)
-                {
-                    UpdateTime = UpdateTime.Tick(FixedTimestep, true);
-                    ResolveUpdate();
-                    fixedTimestepAccumulator -= FixedTimestep;
-                }
-                FixedFramerateInterpolationFactor = fixedTimestepAccumulator / FixedTimestep;
-                FixedFramerateInterpolationFactorF = (float)FixedFramerateInterpolationFactor;
-            }
-            else//open update loop
-            {
-                //Dynamic Substepping
-                if (DynamicSubsteppingEnabled)
-                {
-                    fixedTimestepAccumulator += frameDelta;
-                    
-                    if (fixedTimestepAccumulator > MaxDynamicTimestep)
-                    {
-                        var substeps = (int)(fixedTimestepAccumulator / MaxDynamicTimestep);
-                        if (substeps > curDynamicSubsteps)
-                        {
-                            substeps = curDynamicSubsteps;
-                        }
 
-                        for (int i = 0; i < substeps; i++)
-                        {
-                            UpdateTime = UpdateTime.Tick(MaxDynamicTimestep, true);
-                            ResolveUpdate();
-                            fixedTimestepAccumulator -= MaxDynamicTimestep;
-                        }
-                        
-                        FixedFramerateInterpolationFactor = fixedTimestepAccumulator / MaxDynamicTimestep;
-                        FixedFramerateInterpolationFactorF = (float)FixedFramerateInterpolationFactor;
-                        
-                        curDynamicSubsteps--;
-                        if(curDynamicSubsteps < 1) curDynamicSubsteps = 1;
-                    }
-                    else
+                if (fixedTimestepAccumulator > MaxDynamicTimestep)
+                {
+                    var substeps = (int)(fixedTimestepAccumulator / MaxDynamicTimestep);
+                    if (substeps > curDynamicSubsteps)
                     {
-                        FixedFramerateInterpolationFactor = 1.0;
-                        FixedFramerateInterpolationFactorF = 1f;
-                        UpdateTime = UpdateTime.Tick(frameDelta, false);
+                        substeps = curDynamicSubsteps;
+                    }
+
+                    for (int i = 0; i < substeps; i++)
+                    {
+                        UpdateTime = UpdateTime.Tick(MaxDynamicTimestep, true);
                         ResolveUpdate();
-
-                        fixedTimestepAccumulator -= frameDelta;
-                        
-                        curDynamicSubsteps++;
-                        if(curDynamicSubsteps > MaxDynamicSubsteps) curDynamicSubsteps = MaxDynamicSubsteps;
+                        fixedTimestepAccumulator -= MaxDynamicTimestep;
                     }
+
+                    FixedFramerateInterpolationFactor = fixedTimestepAccumulator / MaxDynamicTimestep;
+                    FixedFramerateInterpolationFactorF = (float)FixedFramerateInterpolationFactor;
+
+                    curDynamicSubsteps--;
+                    if(curDynamicSubsteps < 1) curDynamicSubsteps = 1;
                 }
                 else
                 {
@@ -244,80 +251,103 @@ public partial class Game
                     FixedFramerateInterpolationFactorF = 1f;
                     UpdateTime = UpdateTime.Tick(frameDelta, false);
                     ResolveUpdate();
-                }
-            }
 
-            gameTexture.SetFixedFramerateInterpolationFactor(FixedFramerateInterpolationFactor);
-            
-            GameScreenInfo = gameTexture.GameScreenInfo;
-            GameUiScreenInfo = gameTexture.GameUiScreenInfo;
-            UIScreenInfo = new ScreenInfo(Window.ScreenArea, mousePosUI, true, FixedFramerateInterpolationFactor);
-            
-            UpdateCursor(dt, GameScreenInfo, GameUiScreenInfo, UIScreenInfo);
-            
-            DrawToScreen();
-            
-            ResolveDeferred();
+                    fixedTimestepAccumulator -= frameDelta;
 
-            Input.EndFrame();
-            
-            //Frame Time Management
-            int targetFps = Window.TargetFps;
-            
-            long elapsedNanoSec = frameWatch.ElapsedTicks * nanosecPerTick;
-            FrameTime = ShapeMath.NanoSecondsToSeconds(elapsedNanoSec);
+                    curDynamicSubsteps++;
+                    if(curDynamicSubsteps > MaxDynamicSubsteps) curDynamicSubsteps = MaxDynamicSubsteps;
+                }
+            }
+            else
+            {
+                FixedFramerateInterpolationFactor = 1.0;
+                FixedFramerateInterpolationFactorF = 1f;
+                UpdateTime = UpdateTime.Tick(frameDelta, false);
+                ResolveUpdate();
+            }
+        }
 
-            bool idleUnfocusedLimitActive = false;
-            if (Window.IsUnfocusedFrameRateLimitActive())
+        gameTexture.SetFixedFramerateInterpolationFactor(FixedFramerateInterpolationFactor);
+
+        GameScreenInfo = gameTexture.GameScreenInfo;
+        GameUiScreenInfo = gameTexture.GameUiScreenInfo;
+        UIScreenInfo = new ScreenInfo(Window.ScreenArea, mousePosUI, true, FixedFramerateInterpolationFactor);
+
+        UpdateCursor(dt, GameScreenInfo, GameUiScreenInfo, UIScreenInfo);
+
+        DrawToScreen();
+
+        ResolveDeferred();
+
+        Input.EndFrame();
+
+        // Recorded here (rather than only in ApplyFramePacing) so FrameTime stays accurate for
+        // external drivers that call Tick() directly and skip the standalone pacing wait.
+        elapsedNanoSec = frameWatch.ElapsedTicks * nanosecPerTick;
+        FrameTime = ShapeMath.NanoSecondsToSeconds(elapsedNanoSec);
+    }
+
+    /// <summary>
+    /// Waits, if necessary, to maintain the configured target frame rate. Only used by the
+    /// standalone <see cref="RunGameloop"/> loop — external drivers that call <see cref="Tick"/>
+    /// directly (e.g. an Avalonia-hosted render loop) control their own frame pacing instead.
+    /// </summary>
+    private void ApplyFramePacing()
+    {
+        //Frame Time Management
+        // elapsedNanoSec/FrameTime were already recorded at the end of Tick().
+        int targetFps = Window.TargetFps;
+
+        bool idleUnfocusedLimitActive = false;
+        if (Window.IsUnfocusedFrameRateLimitActive())
+        {
+            int limit = Window.UnfocusedFrameRateLimit;
+            if (limit > 0 && (limit < targetFps || targetFps <= 0))
             {
-                int limit = Window.UnfocusedFrameRateLimit;
-                if (limit > 0 && (limit < targetFps || targetFps <= 0))
-                {
-                    targetFps = limit;
-                    idleUnfocusedLimitActive = true;
-                }
+                targetFps = limit;
+                idleUnfocusedLimitActive = true;
             }
-            
-            if (IsIdleFrameRateLimitActive())
+        }
+
+        if (IsIdleFrameRateLimitActive())
+        {
+            int limit = IdleFrameRateLimit;
+            if (limit > 0 && limit < targetFps)
             {
-                int limit = IdleFrameRateLimit;
-                if (limit > 0 && limit < targetFps)
-                {
-                    targetFps = limit;
-                    idleUnfocusedLimitActive = true;
-                }
+                targetFps = limit;
+                idleUnfocusedLimitActive = true;
             }
-            
-            if (Window.AdaptiveFpsLimiter.Enabled && !idleUnfocusedLimitActive)
+        }
+
+        if (Window.AdaptiveFpsLimiter.Enabled && !idleUnfocusedLimitActive)
+        {
+            targetFps = Window.AdaptiveFpsLimiter.Update(targetFps, FrameTime, FrameDelta, Window.VSync);
+        }
+
+        // Wait to maintain target frame rate
+        if (targetFps > 0)
+        {
+            long totalFrameTimeNanoSec = ShapeMath.NanoSecondsInOneSecond / targetFps;
+            long remainingNanoSec = totalFrameTimeNanoSec - elapsedNanoSec;
+            long msToWait = ShapeMath.NanoSecondsToMilliSeconds(remainingNanoSec);
+            if (msToWait > 1)
             {
-                targetFps = Window.AdaptiveFpsLimiter.Update(targetFps, FrameTime, FrameDelta, Window.VSync);
+                // Subtract 1 millisecond to account for OS scheduling imprecision and ensure we don't overshoot the target frame time.
+                Thread.Sleep((int)(msToWait - 1));
             }
-            
-            // Wait to maintain target frame rate
-            if (targetFps > 0)
+            elapsedNanoSec = frameWatch.ElapsedTicks * nanosecPerTick;
+            remainingNanoSec = totalFrameTimeNanoSec - elapsedNanoSec;
+
+            while (remainingNanoSec > 0)
             {
-                long totalFrameTimeNanoSec = ShapeMath.NanoSecondsInOneSecond / targetFps;
-                long remainingNanoSec = totalFrameTimeNanoSec - elapsedNanoSec;
-                long msToWait = ShapeMath.NanoSecondsToMilliSeconds(remainingNanoSec);
-                if (msToWait > 1)
-                {
-                    // Subtract 1 millisecond to account for OS scheduling imprecision and ensure we don't overshoot the target frame time.
-                    Thread.Sleep((int)(msToWait - 1));
-                }
+                // Divide by 10_000 to convert nanoseconds to an approximate number of SpinWait iterations.
+                // This value was empirically determined to balance CPU usage and timing accuracy.
+                // Needs more testing on other platforms, cpu architectures, and operating systems. (MacOS M2 works well)
+                Thread.SpinWait((int)(remainingNanoSec / 10_000L));
+                Thread.Yield();
+
                 elapsedNanoSec = frameWatch.ElapsedTicks * nanosecPerTick;
                 remainingNanoSec = totalFrameTimeNanoSec - elapsedNanoSec;
-                
-                while (remainingNanoSec > 0)
-                {
-                    // Divide by 10_000 to convert nanoseconds to an approximate number of SpinWait iterations.
-                    // This value was empirically determined to balance CPU usage and timing accuracy.
-                    // Needs more testing on other platforms, cpu architectures, and operating systems. (MacOS M2 works well)
-                    Thread.SpinWait((int)(remainingNanoSec / 10_000L));
-                    Thread.Yield();
-                    
-                    elapsedNanoSec = frameWatch.ElapsedTicks * nanosecPerTick;
-                    remainingNanoSec = totalFrameTimeNanoSec - elapsedNanoSec;
-                }
             }
         }
     }
@@ -413,7 +443,7 @@ public partial class Game
         Raylib.EndDrawing();
     }
 
-    private void EndGameloop()
+    public void EndGameloop()
     {
         EndRun();
 
