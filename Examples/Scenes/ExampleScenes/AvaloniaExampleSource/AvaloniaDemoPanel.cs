@@ -50,6 +50,7 @@ public sealed class AvaloniaDemoPanel : ViewBase
                             .Text(title)
                             .FontSize(22)
                             .FontWeight(FontWeight.SemiBold)
+                            .TextWrapping(TextWrapping.Wrap)
                             .Foreground(Brushes.White),
                         new TextBlock()
                             .Text(description)

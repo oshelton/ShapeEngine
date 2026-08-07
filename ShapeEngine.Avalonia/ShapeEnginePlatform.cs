@@ -31,9 +31,11 @@ internal static class ShapeEnginePlatform
     /// </remarks>
     public static void Initialize()
     {
-        // ShapeEngine's game loop is not a message pump, so there is no synchronization context for
-        // Avalonia to install itself into. Dispatcher work is drained explicitly in Pump().
-        AvaloniaSynchronizationContext.AutoInstall = false;
+        // Avalonia installs its synchronization context on this thread, which ShapeEngine leaves unset.
+        // Without it, anything routing continuations through the current context fails outright -
+        // Animation.RunAsync throws, and awaits inside event handlers resume off the game thread.
+        // Work posted to it is drained by PumpDispatcher once per frame.
+        AvaloniaSynchronizationContext.AutoInstall = true;
 
         var graphics = new RaylibPlatformGraphics();
         var timer = new ManualRenderTimer();

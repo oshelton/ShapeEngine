@@ -41,6 +41,7 @@ public sealed class AvaloniaScalingPanel : ViewBase
                             .Text("Layout vs content scaling")
                             .FontSize(22)
                             .FontWeight(FontWeight.SemiBold)
+                            .TextWrapping(TextWrapping.Wrap)
                             .Foreground(Brushes.White),
                         new TextBlock()
                             .Text("Resize the window and watch what changes: the layout area, or the size of everything in it.")
