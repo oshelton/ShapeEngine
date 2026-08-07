@@ -1,6 +1,8 @@
 using System.Runtime.Versioning;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Metadata;
@@ -157,8 +159,11 @@ public class ShapeEngineView : NativeControlHost
         {
             _floatingContent.PointerEntered -= FloatingContentOnPointerEvent;
             _floatingContent.PointerExited -= FloatingContentOnPointerEvent;
-            _floatingContent.PointerPressed -= FloatingContentOnPointerEvent;
+            _floatingContent.PointerPressed -= FloatingContentOnPointerPressed;
             _floatingContent.PointerReleased -= FloatingContentOnPointerEvent;
+            _floatingContent.KeyDown -= FloatingContentOnKeyDown;
+            _floatingContent.RemoveHandler(InputElement.KeyDownEvent, FloatingContentOnHostKeyBindingsKeyDown);
+            _floatingContent.RemoveHandler(InputElement.KeyDownEvent, FloatingContentOnTabKeyDown);
             _floatingContent.LayoutUpdated -= FloatingContent_LayoutUpdated;
             _floatingContent.Close();
             _floatingContent = null;
@@ -276,8 +281,19 @@ public class ShapeEngineView : NativeControlHost
             };
             _floatingContent.PointerEntered += FloatingContentOnPointerEvent;
             _floatingContent.PointerExited += FloatingContentOnPointerEvent;
-            _floatingContent.PointerPressed += FloatingContentOnPointerEvent;
+            _floatingContent.PointerPressed += FloatingContentOnPointerPressed;
             _floatingContent.PointerReleased += FloatingContentOnPointerEvent;
+
+            // Re-raising KeyDown on this control lets it bubble up through the host window's own
+            // ancestors, as if it had happened there.
+            _floatingContent.KeyDown += FloatingContentOnKeyDown;
+
+            // Tunnel phase, so this runs before a focused overlay control gets a chance to consume
+            // the same key itself (e.g. Escape closing an open ComboBox dropdown). Forwards against
+            // the host's live KeyBindings collection rather than copying it, so bindings added or
+            // removed there later are picked up automatically.
+            _floatingContent.AddHandler(InputElement.KeyDownEvent, FloatingContentOnHostKeyBindingsKeyDown, RoutingStrategies.Tunnel);
+            _floatingContent.AddHandler(InputElement.KeyDownEvent, FloatingContentOnTabKeyDown, RoutingStrategies.Tunnel);
 
             // SizeToContent means _floatingContent.Bounds is (0,0) until its own first layout
             // pass measures its content, so the very first UpdateOverlayPosition() call below
@@ -296,7 +312,54 @@ public class ShapeEngineView : NativeControlHost
 
     private void FloatingContent_LayoutUpdated(object? sender, EventArgs e) => UpdateOverlayPosition();
 
-    private void FloatingContentOnPointerEvent(object? sender, Avalonia.Input.PointerEventArgs e) => RaiseEvent(e);
+    private void FloatingContentOnPointerEvent(object? sender, PointerEventArgs e) => RaiseEvent(e);
+
+    private void FloatingContentOnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        RaiseEvent(e);
+
+        // A click that doesn't land on an actual focusable control (the transparent background,
+        // or empty space in the host-supplied Content) has nowhere useful to send focus here —
+        // send it back to the host window instead of stranding it on this one.
+        if (e.Source is not Control { Focusable: true } && TopLevel.GetTopLevel(this) is Window visualRoot)
+        {
+            visualRoot.Focus();
+        }
+    }
+
+    private void FloatingContentOnKeyDown(object? sender, KeyEventArgs e) => RaiseEvent(e);
+
+    private void FloatingContentOnHostKeyBindingsKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window visualRoot) return;
+
+        foreach (var keyBinding in visualRoot.KeyBindings)
+        {
+            if (keyBinding.Gesture?.Matches(e) != true || keyBinding.Command?.CanExecute(keyBinding.CommandParameter) != true) continue;
+
+            keyBinding.Command.Execute(keyBinding.CommandParameter);
+            e.Handled = true;
+            return;
+        }
+    }
+
+    // Tunnel phase, so this runs before this window's own Tab handling: Tab navigation is scoped
+    // to this window's own focus chain, so at either end it would otherwise just cycle back
+    // instead of moving to the host. Owning the whole key here (both the move and marking it
+    // handled) keeps that single-hop deterministic instead of racing the built-in handling.
+    private void FloatingContentOnTabKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Tab || _floatingContent is not { } floatingContent) return;
+
+        var direction = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? NavigationDirection.Previous : NavigationDirection.Next;
+        var moved = floatingContent.FocusManager?.TryMoveFocus(direction) ?? false;
+        if (!moved && TopLevel.GetTopLevel(this) is Window visualRoot)
+        {
+            visualRoot.Focus();
+        }
+
+        e.Handled = true;
+    }
 
     private void Parent_DetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {

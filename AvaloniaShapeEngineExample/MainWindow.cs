@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Declarative;
+using R3;
 using Raylib_cs;
 using ShapeEngine.Core;
 using ShapeEngine.Core.GameDef;
@@ -15,6 +17,9 @@ public class MainWindow : Window
 {
     public MainWindow()
     {
+        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.Escape), Command = new ReactiveCommand(_ => Close()) });
+        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.Enter, KeyModifiers.Alt), Command = new ReactiveCommand(_ => ToggleFullscreen()) });
+
         this.Title("Avalonia Shape Engine Integration")
             .Width(1280)
             .Height(720)
@@ -24,40 +29,47 @@ public class MainWindow : Window
                 SceneFactory = () => new CircleScene(),
                 Content =  new DockPanel()
                     .Children(
-                        new StackPanel()
-                            .DockPanel_Dock(Dock.Left)
+                        new ScrollViewer()
                             .HorizontalAlignment(HorizontalAlignment.Left)
-                            .VerticalAlignment(VerticalAlignment.Stretch)
-                            .Spacing(12)
-                            .Margin(new Thickness(16))
-                            .MinWidth(300)
-                            .MaxWidth(300)
-                            .Children(
-                                new Button()
-                                    .Content("Button 1")
-                                    .HorizontalAlignment(HorizontalAlignment.Stretch)
-                                    .HorizontalContentAlignment(HorizontalAlignment.Center),
-                                new ComboBox()
-                                    .HorizontalAlignment(HorizontalAlignment.Stretch)
-                                    .HorizontalContentAlignment(HorizontalAlignment.Center)
-                                    .With(x =>
-                                    {
-                                        x.Items.Add("Item 1");
-                                        x.Items.Add("Item 2");
-                                        x.Items.Add("Item 3");
-                                    })
-                                    .SelectedIndex(0),
-                                new ListBox()
-                                    .HorizontalAlignment(HorizontalAlignment.Stretch)
-                                    .Height(500)
-                                    .With(x =>
-                                    {
-                                        for (int i = 0; i < 100; i++)
+                            .Content(
+                            new StackPanel()
+                                .DockPanel_Dock(Dock.Left)
+                                .HorizontalAlignment(HorizontalAlignment.Left)
+                                .VerticalAlignment(VerticalAlignment.Stretch)
+                                .Spacing(12)
+                                .Margin(new Thickness(16))
+                                .MinWidth(300)
+                                .MaxWidth(300)
+                                .Children(
+                                    new TextBlock()
+                                        .Text("Press ESC to exit\nPress Alt + Enter to make fullscreen"),
+                                    new Button()
+                                        .Content("Button 1")
+                                        .HorizontalAlignment(HorizontalAlignment.Stretch)
+                                        .HorizontalContentAlignment(HorizontalAlignment.Center),
+                                    new ComboBox()
+                                        .HorizontalAlignment(HorizontalAlignment.Stretch)
+                                        .HorizontalContentAlignment(HorizontalAlignment.Center)
+                                        .With(x =>
                                         {
-                                            x.Items.Add($"Item {i}");
-                                        }
-                                    })
-                            )
+                                            x.Items.Add("Item 1");
+                                            x.Items.Add("Item 2");
+                                            x.Items.Add("Item 3");
+                                        })
+                                        .SelectedIndex(0),
+                                    new ListBox()
+                                        .HorizontalAlignment(HorizontalAlignment.Stretch)
+                                        .Height(700)
+                                        .With(x =>
+                                        {
+                                            for (int i = 0; i < 100; i++)
+                                            {
+                                                x.Items.Add($"Item {i}");
+                                            }
+                                        }),
+                                    new TextBox()
+                                )
+                        )
                     )
             });
     }
@@ -108,5 +120,42 @@ public class MainWindow : Window
         game.InputEnabled = false;
 
         return game;
+    }
+
+    private PixelPoint _restorePosition;
+    private double _restoreWidth;
+    private double _restoreHeight;
+    private bool _isBorderlessFullscreen;
+
+    // Not WindowState.FullScreen: Avalonia sizes that to the monitor's exact pixel bounds with no
+    // way to adjust it. A window (and the raylib child surface inside it) whose size exactly
+    // matches the monitor can be granted a direct GPU flip/scanout path that bypasses DWM
+    // composition for that whole screen region, hiding every other window there regardless of
+    // correct Win32 z-order — sizing manually lets us fall 1px short below to avoid that.
+    private void ToggleFullscreen()
+    {
+        if (_isBorderlessFullscreen)
+        {
+            WindowDecorations = WindowDecorations.Full;
+            Width = _restoreWidth;
+            Height = _restoreHeight;
+            Position = _restorePosition;
+            _isBorderlessFullscreen = false;
+        }
+        else
+        {
+            var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+            if (screen is null) return;
+
+            _restorePosition = Position;
+            _restoreWidth = Width;
+            _restoreHeight = Height;
+
+            WindowDecorations = WindowDecorations.None;
+            Position = screen.Bounds.Position;
+            Width = screen.Bounds.Width / screen.Scaling;
+            Height = screen.Bounds.Height / screen.Scaling - 1; // 1px short avoids the direct-flip path noted above
+            _isBorderlessFullscreen = true;
+        }
     }
 }
