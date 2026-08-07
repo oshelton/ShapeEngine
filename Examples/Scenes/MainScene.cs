@@ -66,7 +66,18 @@ namespace Examples.Scenes
             examples.Add(new ImguiExample());
             examples.Add(new R3Example());
             examples.Add(new GumExample());
-            
+
+            // ShapeEngine.Avalonia resolves OpenGL entry points through WGL, so it is Windows only
+            // for now. Registering these elsewhere would fail at scene activation rather than here.
+            if (OperatingSystem.IsWindows())
+            {
+                examples.Add(new AvaloniaFullWindowExample());
+                examples.Add(new AvaloniaFixedResolutionExample());
+                examples.Add(new AvaloniaAnchoredRegionExample());
+                examples.Add(new AvaloniaContentScalingExample());
+                examples.Add(new AvaloniaMultipleSurfacesExample());
+            }
+
             buttonContainer = new ControlNodeContainer
             {
                 Anchor = new AnchorPoint(0.05f, 0.92f),

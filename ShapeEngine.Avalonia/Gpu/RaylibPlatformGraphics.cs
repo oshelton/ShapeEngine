@@ -1,0 +1,43 @@
+using Avalonia.Platform;
+
+namespace ShapeEngine.Avalonia.Gpu;
+
+/// <summary>raylib OpenGL based <see cref="IPlatformGraphics"/> implementation.</summary>
+/// <remarks>
+/// There is exactly one OpenGL context - raylib's - so every Avalonia top level shares it. Avalonia's
+/// own Skia backend takes this context and builds the <c>GRContext</c> and render targets on top of it.
+/// The reference count tracks how many top levels are alive so the context wrapper is released with
+/// the last one.
+/// </remarks>
+internal sealed class RaylibPlatformGraphics : IPlatformGraphics, IDisposable
+{
+    private RaylibGlContext? context;
+    private int refCount;
+
+    bool IPlatformGraphics.UsesSharedContext => true;
+
+    public RaylibGlContext GetSharedContext()
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref refCount) == 0, this);
+
+        return context ??= new RaylibGlContext();
+    }
+
+    // raylib's context can't be duplicated, so there is nothing to create on demand.
+    IPlatformGraphicsContext IPlatformGraphics.CreateContext() => throw new NotSupportedException();
+
+    IPlatformGraphicsContext IPlatformGraphics.GetSharedContext() => GetSharedContext();
+
+    public void AddRef() => Interlocked.Increment(ref refCount);
+
+    public void Release()
+    {
+        if (Interlocked.Decrement(ref refCount) == 0) Dispose();
+    }
+
+    public void Dispose()
+    {
+        context?.Dispose();
+        context = null;
+    }
+}
