@@ -139,12 +139,12 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
                     MathF.Cos(offset) * radius,
                     MathF.Sin(offset) * radius);
 
-                new Circle(position, unit * (0.045f - ring * 0.005f)).Draw(color);
+                new Circle(position, unit * (0.045f - ring * 0.005f)).Draw(color,1.0f);
             }
         }
 
         // A pulsing core, so something is moving even with the rings turned off.
         var pulse = 0.5f + 0.5f * MathF.Sin(elapsed * 2.4f);
-        new Circle(center, unit * (0.05f + pulse * 0.03f)).Draw(new ColorRgba(255, 255, 255, 200));
+        new Circle(center, unit * (0.05f + pulse * 0.03f)).Draw(new ColorRgba(255, 255, 255, 200), 1.0f);
     }
 }
