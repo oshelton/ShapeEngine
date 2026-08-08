@@ -15,9 +15,10 @@ namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 /// An Avalonia panel hosting animated ShapeEngine drawing, with Avalonia controls steering it.
 /// </summary>
 /// <remarks>
-/// The artwork is drawn with ShapeEngine's own shape functions into a
-/// <see cref="ShapeEngineTextureView"/>, so it sits in the control tree like any other control - it
-/// scales with the surface, is clipped by its parent, and has Avalonia content layered over it.
+/// The artwork is drawn with ShapeEngine's own shape functions into texture views, so it sits in the
+/// control tree like any other control - it scales with the surface, is clipped by its parent, and has
+/// Avalonia content layered over it. Both view kinds are shown: an animated one for the orbits and a
+/// static one for the emblem, which only redraws when the button asks it to.
 /// </remarks>
 public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
 {
@@ -32,8 +33,10 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
     private TextBlock statusText = null!;
     private AvSlider speedSlider = null!;
     private ToggleSwitch orbitRingsToggle = null!;
+    private ShapeEngineStaticTextureView emblemView = null!;
 
     private float elapsed;
+    private int emblemSeed = 1;
 
     public AvaloniaEmbeddedDrawingPanel() => Initialize();
 
@@ -85,6 +88,17 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
                             .Content("Orbit paths")
                             .IsChecked(true),
                         new TextBlock()
+                            .Text("Static view - drawn once, not per frame")
+                            .FontSize(12)
+                            .TextWrapping(TextWrapping.Wrap)
+                            .Foreground(Brushes.DarkGray),
+                        BuildEmblem(),
+                        new Button()
+                            .Content("Redraw emblem")
+                            .HorizontalAlignment(HorizontalAlignment.Stretch)
+                            .HorizontalContentAlignment(HorizontalAlignment.Center)
+                            .OnClick(_ => RegenerateEmblem()),
+                        new TextBlock()
                             .Ref(out statusText)
                             .TextWrapping(TextWrapping.Wrap)
                             .Foreground(Brushes.Gainsboro)));
@@ -105,10 +119,28 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
             .CornerRadius(new CornerRadius(8))
             .ClipToBounds(true)
             .Child(
-                new ShapeEngineTextureView
+                new ShapeEngineAnimatedTextureView
                 {
                     DrawContent = DrawArtwork
                 });
+
+    /// <summary>
+    /// The static counterpart to the animated artwork above.
+    /// </summary>
+    /// <remarks>
+    /// Drawn once and then left alone, so it costs nothing per frame. The button below it changes the
+    /// seed and calls <c>InvalidateContent</c>, which is the only thing that makes it draw again.
+    /// </remarks>
+    private Control BuildEmblem()
+        => new Border()
+            .Height(90)
+            .CornerRadius(new CornerRadius(8))
+            .ClipToBounds(true)
+            .Child(
+                new ShapeEngineStaticTextureView
+                {
+                    DrawContent = DrawEmblem
+                }.Ref(out emblemView));
 
     /// <summary>
     /// Draws the artwork with ShapeEngine's shape functions.
@@ -150,5 +182,40 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
         // A pulsing core, so something is moving even with the rings turned off.
         var pulse = 0.5f + 0.5f * MathF.Sin(elapsed * 2.4f);
         new Circle(center, unit * (0.05f + pulse * 0.03f)).Draw(new ColorRgba(255, 255, 255, 200), 1.0f);
+    }
+
+    /// <summary>Picks a new emblem and asks the static view to draw it.</summary>
+    private void RegenerateEmblem()
+    {
+        emblemSeed++;
+        emblemView.InvalidateContent();
+    }
+
+    /// <summary>
+    /// Draws a fixed arrangement of shapes from the current seed.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here reads the animation clock, so the result only changes when the seed does - which is
+    /// exactly the case the static view exists for.
+    /// </remarks>
+    private void DrawEmblem(SeRect bounds)
+    {
+        var random = new Random(emblemSeed);
+        var center = bounds.Center;
+        var unit = Math.Min(bounds.Width, bounds.Height);
+
+        for (var i = 0; i < 9; i++)
+        {
+            var angle = (float)random.NextDouble() * MathF.Tau;
+            var distance = unit * (0.1f + (float)random.NextDouble() * 0.55f);
+            var position = center + new System.Numerics.Vector2(
+                MathF.Cos(angle) * distance * (bounds.Width / unit),
+                MathF.Sin(angle) * distance);
+
+            var color = OrbitColors[random.Next(OrbitColors.Length)];
+            new Circle(position, unit * (0.05f + (float)random.NextDouble() * 0.1f)).Draw(color.SetAlpha(190), 1.0f);
+        }
+
+        new Circle(center, unit * 0.36f).DrawLines(2f, new ColorRgba(255, 255, 255, 120), 4f);
     }
 }

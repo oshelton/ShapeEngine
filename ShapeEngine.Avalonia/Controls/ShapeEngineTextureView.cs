@@ -7,49 +7,40 @@ using Raylib_cs;
 using ShapeEngine.Color;
 using ShapeEngine.Core.GameDef;
 using ShapeEngine.Core.Structs;
+using AvPixelFormat = Avalonia.Platform.PixelFormat;
 using SeRect = ShapeEngine.Geometry.RectDef.Rect;
 
 namespace ShapeEngine.Avalonia.Controls;
 
 /// <summary>
-/// An Avalonia control that displays content drawn with ShapeEngine's own drawing functions.
+/// Base for Avalonia controls that display content drawn with ShapeEngine's own drawing functions.
 /// </summary>
 /// <remarks>
 /// The content is rendered into a private raylib render texture during the game's frame, then copied
 /// into a bitmap the control draws. Nothing hands the OpenGL context between raylib and Skia, so this
-/// costs a texture and a per-frame read back rather than any risk of the two renderers corrupting each
-/// other's state.
+/// costs a texture and a read back rather than any risk of the two renderers corrupting each other's
+/// state.
 /// <para>
 /// Read back is the expensive part: it stalls the GPU pipeline, and the cost scales with the control's
-/// area. Keep the control small, or raise <see cref="RefreshInterval"/> to redraw less often than every
-/// frame. For full-size or high-frequency content, drawing with raylib directly is the better tool.
+/// area. How often it happens is the whole difference between the two concrete views - see
+/// <see cref="ShapeEngineStaticTextureView"/> and <see cref="ShapeEngineAnimatedTextureView"/>.
 /// </para>
 /// <para>
 /// The redraw happens in the engine's UI drawing pass, which is after a surface has already composited,
 /// so the control shows what was drawn last frame. Expect one frame of latency.
 /// </para>
 /// </remarks>
-/// <example>
-/// <code>
-/// new ShapeEngineTextureView
-/// {
-///     Width = 300,
-///     Height = 180,
-///     DrawContent = bounds => new Circle(bounds.Center, 40f).Draw(ColorRgba.White)
-/// }
-/// </code>
-/// </example>
-public sealed class ShapeEngineTextureView : Control
+public abstract class ShapeEngineTextureView : Control
 {
     private readonly FramePump pump;
 
     private RenderTexture2D renderTexture;
     private WriteableBitmap? bitmap;
     private PixelSize textureSize;
-    private double refreshTimer;
     private bool hasTexture;
+    private bool isDirty = true;
 
-    public ShapeEngineTextureView() => pump = new FramePump(this);
+    protected ShapeEngineTextureView() => pump = new FramePump(this);
 
     /// <summary>
     /// Draws the content, in texture pixel coordinates. Called during the game's frame, so ShapeEngine's
@@ -60,11 +51,15 @@ public sealed class ShapeEngineTextureView : Control
     /// <summary>The colour the texture is cleared to before each draw. Transparent by default.</summary>
     public ColorRgba ClearColor { get; set; } = ColorRgba.Transparent;
 
-    /// <summary>
-    /// Minimum seconds between redraws. Zero redraws every frame; raise it to trade freshness for the
-    /// cost of the read back.
-    /// </summary>
-    public double RefreshInterval { get; set; }
+    /// <summary>Marks the content as out of date, so it is drawn again on the next frame.</summary>
+    public void InvalidateContent() => isDirty = true;
+
+    /// <summary>Whether the content should be drawn again this frame.</summary>
+    /// <param name="deltaTime">Seconds since the previous frame.</param>
+    /// <param name="contentIsDirty">
+    /// Whether the texture was just created or resized, or <see cref="InvalidateContent"/> was called.
+    /// </param>
+    protected abstract bool ShouldRedraw(float deltaTime, bool contentIsDirty);
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -85,20 +80,14 @@ public sealed class ShapeEngineTextureView : Control
         if (bitmap is not null) context.DrawImage(bitmap, new Rect(Bounds.Size));
     }
 
-    /// <summary>Redraws the texture and copies it into the bitmap.</summary>
+    /// <summary>Redraws the texture and copies it into the bitmap, if the view wants a redraw.</summary>
     private void RenderFrame(float deltaTime)
     {
         if (DrawContent is not { } drawContent) return;
-
-        if (RefreshInterval > 0.0)
-        {
-            refreshTimer -= deltaTime;
-            if (refreshTimer > 0.0) return;
-
-            refreshTimer = RefreshInterval;
-        }
-
         if (!EnsureTexture()) return;
+        if (!ShouldRedraw(deltaTime, isDirty)) return;
+
+        isDirty = false;
 
         Raylib.BeginTextureMode(renderTexture);
         Raylib.ClearBackground(ClearColor.ToRayColor());
@@ -112,12 +101,13 @@ public sealed class ShapeEngineTextureView : Control
     /// <summary>Creates or resizes the render texture to match the control's size in physical pixels.</summary>
     private bool EnsureTexture()
     {
+        if (Bounds.Width <= 0.0 || Bounds.Height <= 0.0) return false;
+
         var scaling = (VisualRoot as TopLevel)?.RenderScaling ?? 1.0;
         var size = new PixelSize(
             Math.Max((int)Math.Round(Bounds.Width * scaling), 1),
             Math.Max((int)Math.Round(Bounds.Height * scaling), 1));
 
-        if (Bounds.Width <= 0.0 || Bounds.Height <= 0.0) return false;
         if (hasTexture && size == textureSize) return true;
 
         Release();
@@ -126,7 +116,10 @@ public sealed class ShapeEngineTextureView : Control
         textureSize = size;
         hasTexture = true;
 
-        bitmap = new WriteableBitmap(size, new Vector(96, 96), global::Avalonia.Platform.PixelFormat.Rgba8888, AlphaFormat.Unpremul);
+        bitmap = new WriteableBitmap(size, new Vector(96, 96), AvPixelFormat.Rgba8888, AlphaFormat.Unpremul);
+
+        // A fresh texture holds nothing, so it needs a draw whatever the redraw policy says.
+        isDirty = true;
         return true;
     }
 
