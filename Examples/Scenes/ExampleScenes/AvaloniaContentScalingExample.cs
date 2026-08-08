@@ -1,26 +1,21 @@
-using System.Numerics;
 using Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 using ShapeEngine.Avalonia;
 using ShapeEngine.Core.Structs;
-using ShapeEngine.Screen;
 
 namespace Examples.Scenes.ExampleScenes;
 
 /// <summary>
-/// Switches a surface between the two content sizing options, and the two rasterization options,
-/// at runtime.
+/// Switches a surface between laying its content out at the surface's size and scaling it to fit.
 /// </summary>
 /// <remarks>
-/// Both sizing options are supported: leaving <c>DesignSize</c> null lets the layout expand into the
-/// surface, while setting it pins the layout and scales everything uniformly to fit. The rasterization
-/// toggle switches between drawing through the placement texture and drawing at the on-screen pixel
-/// size. Resize the window with each combination to see the difference.
+/// With scaling off the layout expands into the surface: a wider window gives controls more room and
+/// text keeps its size. With it on the content is measured at its natural size and scaled uniformly,
+/// so everything grows together - the resolution-independent option for a game UI. Resize the window
+/// with each setting to see the difference.
 /// </remarks>
 public class AvaloniaContentScalingExample : AvaloniaExampleSceneBase
 {
-    private static readonly Dimensions DesignSize = new(320, 420);
-    private static readonly Vector2 AnchorStretch = new(0.36f, 0.7f);
-    private static readonly Vector2 AnchorPosition = new(0.04f, 0.6f);
+    private static readonly AvaloniaSurfaceAnchor Anchor = new(0.36f, 0.7f, 0.04f, 0.6f);
 
     private AvaloniaSurface? surface;
     private AvaloniaScalingPanel? panel;
@@ -28,29 +23,17 @@ public class AvaloniaContentScalingExample : AvaloniaExampleSceneBase
     public AvaloniaContentScalingExample()
     {
         Title = "Avalonia - Content Scaling";
-        Description = "Toggle between expanding the layout and scaling the content, and between rasterization modes";
+        Description = "Toggle between expanding the layout and scaling the content to fit the surface";
     }
 
     protected override IReadOnlyList<AvaloniaSurface> CreateSurfaces()
     {
         panel = new AvaloniaScalingPanel();
-
-        var placement = new ScreenTexture(AnchorStretch, AnchorPosition, ShaderSupportType.None);
-        surface = new AvaloniaSurface(panel, placement);
+        surface = new AvaloniaSurface(panel, Anchor);
 
         panel.ScaleContentChanged += scaleContent =>
         {
-            if (surface is not null) surface.DesignSize = scaleContent ? DesignSize : null;
-        };
-
-        panel.NativeDensityChanged += nativeDensity =>
-        {
-            if (surface is not null)
-            {
-                surface.Scaling = nativeDensity
-                    ? AvaloniaSurfaceScaling.NativeDensity
-                    : AvaloniaSurfaceScaling.MatchTexture;
-            }
+            if (surface is not null) surface.ScaleContent = scaleContent;
         };
 
         return [surface];
@@ -61,14 +44,12 @@ public class AvaloniaContentScalingExample : AvaloniaExampleSceneBase
         if (surface is null) return;
 
         var rect = surface.DestinationRect;
-        var sizing = surface.DesignSize is { } design
-            ? $"content scales from {design.Width}x{design.Height}"
-            : "layout expands";
+        var sizing = surface.ScaleContent ? "content scales to fit" : "layout expands";
 
         panel?.SetStatus(
             $"""
              {sizing}
-             {surface.Scaling}, drawn at {rect.Width:0}x{rect.Height:0}
+             Drawn at {rect.Width:0}x{rect.Height:0}
              """);
     }
 }

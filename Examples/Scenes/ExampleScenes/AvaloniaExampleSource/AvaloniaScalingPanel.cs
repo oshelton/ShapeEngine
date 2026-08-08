@@ -20,13 +20,11 @@ public sealed class AvaloniaScalingPanel : ViewBase
     /// <summary>Raised when the user asks for the content to scale rather than the layout to expand.</summary>
     public event Action<bool>? ScaleContentChanged;
 
-    /// <summary>Raised when the user switches between rasterizing at texture size and at screen size.</summary>
-    public event Action<bool>? NativeDensityChanged;
-
     public AvaloniaScalingPanel() => Initialize();
 
     protected override object Build()
         => new Border()
+            .Width(320)
             .Background(new SolidColorBrush(Color.FromArgb(220, 24, 24, 34)))
             .BorderBrush(new SolidColorBrush(Color.FromArgb(255, 90, 90, 130)))
             .BorderThickness(new Thickness(1))
@@ -50,13 +48,8 @@ public sealed class AvaloniaScalingPanel : ViewBase
                         new ToggleSwitch()
                             .Content("Content sizing")
                             .OffContent("Layout expands to fill")
-                            .OnContent("Content scales to design size")
+                            .OnContent("Content scales to fit")
                             .OnIsCheckedChanged(e => ScaleContentChanged?.Invoke(((ToggleSwitch)e.Source!).IsChecked == true)),
-                        new ToggleSwitch()
-                            .Content("Rasterization")
-                            .OffContent("MatchTexture (shaders apply)")
-                            .OnContent("NativeDensity (crisper)")
-                            .OnIsCheckedChanged(e => NativeDensityChanged?.Invoke(((ToggleSwitch)e.Source!).IsChecked == true)),
                         new TextBlock()
                             .Text("Sample body text at 14 point")
                             .FontSize(14)

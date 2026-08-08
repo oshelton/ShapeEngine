@@ -66,7 +66,7 @@ internal sealed class ShapeEngineTopLevelImpl : ITopLevelImpl
     /// <summary>The surface raylib presents, or <c>null</c> before the first frame.</summary>
     public RaylibGlSurface? TryGetSurface() => surface;
 
-    public RaylibGlSurface GetOrCreateSurface() => surface ??= CreateSurface();
+    private RaylibGlSurface GetOrCreateSurface() => surface ??= CreateSurface();
 
     private RaylibGlSurface CreateSurface()
     {

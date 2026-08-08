@@ -45,6 +45,7 @@ public sealed class AvaloniaHudPanel : ViewBase
                 .Foreground(Brushes.Gainsboro));
 
         return new Border()
+            .Width(220)
             .Background(new SolidColorBrush(Color.FromArgb(210, 20, 20, 30)))
             .BorderBrush(new SolidColorBrush(accent))
             .BorderThickness(new Thickness(1))

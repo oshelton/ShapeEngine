@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using Avalonia.VisualTree;
 using Raylib_cs;
 using ShapeEngine.Color;
 using ShapeEngine.Core.GameDef;
@@ -26,9 +25,8 @@ namespace ShapeEngine.Avalonia.Controls;
 /// frame. For full-size or high-frequency content, drawing with raylib directly is the better tool.
 /// </para>
 /// <para>
-/// The redraw happens in the engine's UI drawing pass. A surface that composites earlier in the frame -
-/// one placed by a screen texture in <see cref="AvaloniaSurfaceScaling.MatchTexture"/> - therefore shows
-/// what was drawn last frame, so expect up to one frame of latency.
+/// The redraw happens in the engine's UI drawing pass, which is after a surface has already composited,
+/// so the control shows what was drawn last frame. Expect one frame of latency.
 /// </para>
 /// </remarks>
 /// <example>

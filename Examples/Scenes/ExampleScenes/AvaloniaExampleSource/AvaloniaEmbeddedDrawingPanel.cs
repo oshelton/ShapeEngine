@@ -49,6 +49,7 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
 
     protected override object Build()
         => new Border()
+            .Width(340)
             .Background(new SolidColorBrush(Color.FromArgb(220, 24, 24, 34)))
             .BorderBrush(new SolidColorBrush(Color.FromArgb(255, 90, 90, 130)))
             .BorderThickness(new Thickness(1))
@@ -94,11 +95,14 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
     /// <summary>Shows the surface's live state, updated by the scene each frame.</summary>
     public void SetStatus(string status) => statusText.Text = status;
 
+    /// <remarks>
+    /// No background: the texture view clears to transparent, so the panel - and the game behind it -
+    /// show through wherever the artwork does not draw.
+    /// </remarks>
     private Control BuildArtwork()
         => new Border()
             .Height(190)
             .CornerRadius(new CornerRadius(8))
-            .Background(new SolidColorBrush(Color.FromArgb(255, 14, 14, 22)))
             .ClipToBounds(true)
             .Child(
                 new ShapeEngineTextureView

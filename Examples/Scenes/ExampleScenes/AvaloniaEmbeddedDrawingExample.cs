@@ -1,8 +1,6 @@
-using System.Numerics;
 using Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 using ShapeEngine.Avalonia;
 using ShapeEngine.Core.Structs;
-using ShapeEngine.Screen;
 
 namespace Examples.Scenes.ExampleScenes;
 
@@ -17,9 +15,7 @@ namespace Examples.Scenes.ExampleScenes;
 /// </remarks>
 public class AvaloniaEmbeddedDrawingExample : AvaloniaExampleSceneBase
 {
-    private static readonly Dimensions DesignSize = new(340, 570);
-    private static readonly Vector2 AnchorStretch = new(0.36f, 0.78f);
-    private static readonly Vector2 AnchorPosition = new(0.04f, 0.56f);
+    private static readonly AvaloniaSurfaceAnchor Anchor = new(0.36f, 0.78f, 0.04f, 0.56f);
 
     private AvaloniaSurface? surface;
     private AvaloniaEmbeddedDrawingPanel? panel;
@@ -34,12 +30,9 @@ public class AvaloniaEmbeddedDrawingExample : AvaloniaExampleSceneBase
     {
         panel = new AvaloniaEmbeddedDrawingPanel();
 
-        var placement = new ScreenTexture(AnchorStretch, AnchorPosition, ShaderSupportType.None);
-
         // Scales the whole panel, artwork included: the texture view sizes its render texture from the
-        // surface's render scaling, so the drawing is rasterized at the scaled size rather than
-        // magnified.
-        surface = new AvaloniaSurface(panel, placement) { DesignSize = DesignSize };
+        // surface's render scaling, so the drawing is rasterized at the scaled size rather than magnified.
+        surface = new AvaloniaSurface(panel, Anchor, scaleContent: true);
 
         return [surface];
     }

@@ -1,8 +1,6 @@
-using System.Numerics;
 using Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 using ShapeEngine.Avalonia;
 using ShapeEngine.Core.Structs;
-using ShapeEngine.Screen;
 
 namespace Examples.Scenes.ExampleScenes;
 
@@ -10,14 +8,13 @@ namespace Examples.Scenes.ExampleScenes;
 /// A surface occupying a region of the screen defined as a fraction of the window.
 /// </summary>
 /// <remarks>
-/// Anchor mode sizes the surface to a proportion of the window and pins it to a relative position, so
-/// the UI keeps its place and proportions as the window resizes. The usual choice for a HUD panel that
+/// The anchor sizes the surface to a proportion of the window and pins it to a relative position, so the
+/// UI keeps its place and proportions as the window resizes. The usual choice for a HUD panel that
 /// should own one corner of the screen rather than the whole thing.
 /// </remarks>
 public class AvaloniaAnchoredRegionExample : AvaloniaExampleSceneBase
 {
-    private static readonly Vector2 AnchorStretch = new(0.34f, 0.66f);
-    private static readonly Vector2 AnchorPosition = new(0.04f, 0.62f);
+    private static readonly AvaloniaSurfaceAnchor Anchor = new(0.34f, 0.66f, 0.04f, 0.62f);
 
     private AvaloniaSurface? surface;
     private AvaloniaDemoPanel? panel;
@@ -34,9 +31,7 @@ public class AvaloniaAnchoredRegionExample : AvaloniaExampleSceneBase
             "Anchored region",
             "The surface is a fraction of the window pinned to a relative position, and the panel fills it. Resize the window and the region keeps its proportions.");
 
-        var placement = new ScreenTexture(AnchorStretch, AnchorPosition, ShaderSupportType.None);
-
-        surface = new AvaloniaSurface(panel, placement);
+        surface = new AvaloniaSurface(panel, Anchor);
         return [surface];
     }
 

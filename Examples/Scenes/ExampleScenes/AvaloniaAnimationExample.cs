@@ -1,8 +1,6 @@
-using System.Numerics;
 using Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 using ShapeEngine.Avalonia;
 using ShapeEngine.Core.Structs;
-using ShapeEngine.Screen;
 
 namespace Examples.Scenes.ExampleScenes;
 
@@ -18,8 +16,7 @@ public class AvaloniaAnimationExample : AvaloniaExampleSceneBase
 {
     private const float TransitionInterval = 1.6f;
 
-    private static readonly Vector2 AnchorStretch = new(0.36f, 0.82f);
-    private static readonly Vector2 AnchorPosition = new(0.04f, 0.55f);
+    private static readonly AvaloniaSurfaceAnchor Anchor = new(0.36f, 0.82f, 0.04f, 0.55f);
 
     private AvaloniaSurface? surface;
     private AvaloniaAnimationPanel? panel;
@@ -35,9 +32,7 @@ public class AvaloniaAnimationExample : AvaloniaExampleSceneBase
     {
         panel = new AvaloniaAnimationPanel();
 
-        var placement = new ScreenTexture(AnchorStretch, AnchorPosition, ShaderSupportType.None);
-
-        surface = new AvaloniaSurface(panel, placement);
+        surface = new AvaloniaSurface(panel, Anchor);
         transitionTimer = 0f;
 
         return [surface];

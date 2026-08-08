@@ -1,4 +1,3 @@
-using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -7,20 +6,19 @@ using Avalonia.Media;
 using Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 using ShapeEngine.Avalonia;
 using ShapeEngine.Core.Structs;
-using ShapeEngine.Screen;
 
 namespace Examples.Scenes.ExampleScenes;
 
 /// <summary>
-/// Four independent Avalonia surfaces on screen at once, each with its own placement and settings.
+/// Four independent Avalonia surfaces on screen at once, each with its own anchor and settings.
 /// </summary>
 /// <remarks>
-/// Every surface is a separate Avalonia top level with its own control tree, focus and input state,
-/// all sharing raylib's single OpenGL context. Each keeps its own input capture, so typing into one
-/// panel's text box does not disturb the others or the game.
+/// Every surface is a separate Avalonia top level with its own control tree, focus and input state, all
+/// sharing raylib's single OpenGL context and each owning its own screen texture. Each keeps its own
+/// input capture, so typing into one panel's text box does not disturb the others or the game.
 /// <para>
-/// The three placed surfaces use different scaling settings so the differences are visible side by
-/// side; the fourth has no placement texture, which puts it on top of the others.
+/// The three anchored surfaces differ in whether they scale their content, so the effect is visible side
+/// by side; the fourth covers the window and draws over them.
 /// </para>
 /// </remarks>
 public class AvaloniaMultipleSurfacesExample : AvaloniaExampleSceneBase
@@ -35,12 +33,12 @@ public class AvaloniaMultipleSurfacesExample : AvaloniaExampleSceneBase
 
     protected override IReadOnlyList<AvaloniaSurface> CreateSurfaces()
     {
-        // No placement texture, so this one covers the window and draws after the others.
+        // No anchor, so this one covers the window. A higher order draws it over the others.
         var overlayPanel = new AvaloniaHudPanel(
             "Full window overlay",
             Color.FromRgb(255, 140, 200),
             new TextBlock()
-                .Text("No placement texture, so this surface covers the window and draws last.")
+                .Text("No anchor given, so this surface covers the window and draws over the rest.")
                 .TextWrapping(TextWrapping.Wrap)
                 .FontSize(12)
                 .Foreground(Brushes.Gainsboro))
@@ -56,46 +54,21 @@ public class AvaloniaMultipleSurfacesExample : AvaloniaExampleSceneBase
 
         return
         [
-            CreatePanel(
-                "Top left",
-                Color.FromRgb(120, 200, 255),
-                new Vector2(0.26f, 0.3f),
-                new Vector2(0.03f, 0.16f),
-                AvaloniaSurfaceScaling.MatchTexture,
-                designSize: null),
-            CreatePanel(
-                "Bottom left, scaled",
-                Color.FromRgb(160, 255, 160),
-                new Vector2(0.26f, 0.3f),
-                new Vector2(0.03f, 0.84f),
-                AvaloniaSurfaceScaling.MatchTexture,
-                designSize: new Dimensions(220, 200)),
-            CreatePanel(
-                "Right, native density",
-                Color.FromRgb(255, 190, 120),
-                new Vector2(0.24f, 0.34f),
-                new Vector2(0.97f, 0.5f),
-                AvaloniaSurfaceScaling.NativeDensity,
-                designSize: null),
+            CreatePanel("Top left", Color.FromRgb(120, 200, 255), new AvaloniaSurfaceAnchor(0.26f, 0.3f, 0.03f, 0.16f), scaleContent: false),
+            CreatePanel("Bottom left, scaled", Color.FromRgb(160, 255, 160), new AvaloniaSurfaceAnchor(0.26f, 0.3f, 0.03f, 0.84f), scaleContent: true),
+            CreatePanel("Right", Color.FromRgb(255, 190, 120), new AvaloniaSurfaceAnchor(0.24f, 0.34f, 0.97f, 0.5f), scaleContent: false),
             overlay
         ];
     }
 
-    private AvaloniaSurface CreatePanel(
-        string title,
-        Color accent,
-        Vector2 anchorStretch,
-        Vector2 anchorPosition,
-        AvaloniaSurfaceScaling scaling,
-        Dimensions? designSize)
+    private AvaloniaSurface CreatePanel(string title, Color accent, AvaloniaSurfaceAnchor anchor, bool scaleContent)
     {
         var panel = new AvaloniaHudPanel(
             title,
             accent,
             new TextBox().PlaceholderText("focus me").FontSize(12));
 
-        var placement = new ScreenTexture(anchorStretch, anchorPosition, ShaderSupportType.None);
-        var surface = new AvaloniaSurface(panel, placement, scaling) { DesignSize = designSize };
+        var surface = new AvaloniaSurface(panel, anchor, scaleContent);
 
         panels.Add((surface, panel));
         return surface;

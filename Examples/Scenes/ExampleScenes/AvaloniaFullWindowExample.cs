@@ -10,9 +10,8 @@ namespace Examples.Scenes.ExampleScenes;
 /// A surface covering the whole window, with the panel positioned by Avalonia layout alone.
 /// </summary>
 /// <remarks>
-/// The simplest arrangement: no placement texture, so the surface is the window and the UI is
-/// positioned the way it would be in any Avalonia application. Being a custom event rather than a
-/// screen texture, it also draws after the game's own UI, on top of everything.
+/// The default arrangement: no anchor is given, so the surface fills the window and the UI is placed the
+/// way it would be in any Avalonia application.
 /// </remarks>
 public class AvaloniaFullWindowExample : AvaloniaExampleSceneBase
 {
@@ -29,7 +28,7 @@ public class AvaloniaFullWindowExample : AvaloniaExampleSceneBase
     {
         panel = new AvaloniaDemoPanel(
             "Full window surface",
-            "The surface is the whole window. Margin and alignment place the panel, exactly as they would in a desktop Avalonia app.")
+            "The surface fills the window. Margin and alignment place the panel, exactly as they would in a desktop Avalonia app.")
         {
             Width = 380,
             HorizontalAlignment = HorizontalAlignment.Left,

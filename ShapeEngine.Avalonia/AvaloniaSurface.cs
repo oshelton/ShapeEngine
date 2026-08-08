@@ -3,6 +3,7 @@ using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Raylib_cs;
 using ShapeEngine.Avalonia.Input;
@@ -20,23 +21,19 @@ namespace ShapeEngine.Avalonia;
 /// Hosts Avalonia UI inside a ShapeEngine game, rendered onto the game's OpenGL surface.
 /// </summary>
 /// <remarks>
-/// Register it with <c>Game.AddCustomEvent</c> and set <see cref="Content"/>. Avalonia must already be
+/// Register it with <c>Game.AddCustomEvent</c> and dispose it when done. Avalonia must already be
 /// configured - see <see cref="AppBuilderExtensions.UseShapeEngine"/>.
 /// <para>
-/// By default the surface covers the whole window at native resolution. Pass a <see cref="ScreenTexture"/>
-/// to place and scale it instead: the texture's <c>ScreenTextureMode</c> decides the surface resolution,
-/// where on screen it lands, and how the mouse maps into it - the same rules the game texture follows.
-/// Use <see cref="Order"/> (from <c>Game.CustomEvent</c>) to control where it draws relative to other
-/// custom events.
+/// The surface owns the <see cref="ScreenTexture"/> it renders through, registering and unloading it
+/// with the game itself. Placement comes from the <see cref="AvaloniaSurfaceAnchor"/> passed to the
+/// constructor, so a surface keeps its position and proportions as the window resizes. Because the UI
+/// goes through a screen texture, the texture's <see cref="ScreenTexture.Shaders"/> apply to it - a
+/// post-processing shader can run over the interface.
 /// </para>
 /// <para>
-/// Layering differs between the two arrangements, because a screen texture composites earlier in the
-/// frame than a custom event does. Without a placement texture - and with one in
-/// <see cref="AvaloniaSurfaceScaling.NativeDensity"/> - the UI is drawn after the game's <c>DrawUI</c>,
-/// so it sits on top of everything. With a placement texture in
-/// <see cref="AvaloniaSurfaceScaling.MatchTexture"/> the engine draws it alongside the other screen
-/// textures, which is before <c>DrawUI</c>, so anything the game draws there covers the UI. Order
-/// against other screen textures is then controlled by the texture's <c>DrawToScreenOrder</c>.
+/// Screen textures composite before the game's <c>DrawUI</c>, so anything the game draws there covers
+/// the interface. Ordering against other screen textures is controlled by the texture's
+/// <c>DrawToScreenOrder</c>.
 /// </para>
 /// </remarks>
 /// <example>
@@ -46,50 +43,39 @@ namespace ShapeEngine.Avalonia;
 ///
 /// Game.Instance.AddCustomEvent(new AvaloniaSurface(new MyMenuView()));
 /// </code>
-/// Placed and scaled by a screen texture - here a fixed 1920x1080 design resolution that letterboxes
-/// into the window, with a shader applied over the UI:
+/// A HUD panel in the lower left that scales its content with the window:
 /// <code>
-/// var placement = new ScreenTexture(new Dimensions(1920, 1080), ShaderSupportType.Single);
-/// var surface = new AvaloniaSurface(new MyMenuView(), placement);
+/// var surface = new AvaloniaSurface(
+///     new MyHudView(),
+///     new AvaloniaSurfaceAnchor(0.3f, 0.4f, 0.02f, 0.98f),
+///     scaleContent: true);
 ///
-/// Game.Instance.AddScreenTexture(placement);  // drives sizing, placement and shaders
-/// Game.Instance.AddCustomEvent(surface);      // drives input and Avalonia rendering
+/// Game.Instance.AddCustomEvent(surface);
 /// </code>
 /// </example>
 public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 {
     private readonly ShapeEngineTopLevelImpl impl;
     private readonly AvaloniaInputPump inputPump;
-    private readonly ScreenTexture? placement;
+    private readonly ScreenTexture placement;
+    private readonly Viewbox scaleBox = new() { Stretch = Stretch.Uniform };
 
     /// <summary>Drives Avalonia's animation clock, independent of the game's own time scaling.</summary>
     private readonly Stopwatch renderClock = Stopwatch.StartNew();
 
-    private Vector2 pointerScale = Vector2.One;
+    private AvControl? content;
+    private bool scaleContent;
     private MouseCursor currentCursor = MouseCursor.Default;
     private bool hasLockedMouse;
     private bool hasLockedKeyboard;
     private bool isDisposed;
 
-    /// <summary>Creates a surface that covers the whole window at native resolution.</summary>
+    /// <summary>Creates a surface and the screen texture it renders through.</summary>
     /// <param name="content">The Avalonia control tree to display.</param>
-    /// <param name="order">
-    /// Execution order relative to other custom events. Lower values run - and draw - first.
+    /// <param name="anchor">Where the surface sits on screen. Defaults to the whole window.</param>
+    /// <param name="scaleContent">
+    /// Scales the content to fit the surface instead of laying it out at the surface's size.
     /// </param>
-    /// <exception cref="InvalidOperationException">
-    /// Avalonia has not been configured with <see cref="AppBuilderExtensions.UseShapeEngine"/>.
-    /// </exception>
-    public AvaloniaSurface(AvControl? content = null, int order = 0)
-        : this(content, null, AvaloniaSurfaceScaling.MatchTexture, order) { }
-
-    /// <summary>Creates a surface placed and scaled by a <see cref="ScreenTexture"/>.</summary>
-    /// <param name="content">The Avalonia control tree to display.</param>
-    /// <param name="placementTexture">
-    /// The texture whose <c>ScreenTextureMode</c> decides the surface resolution, its destination
-    /// rectangle on screen and the mouse mapping. Register it with <c>Game.AddScreenTexture</c> as
-    /// well - the engine has to update and draw it.
-    /// </param>
-    /// <param name="scaling">How the UI is rasterized when the texture is drawn at a different size.</param>
     /// <param name="order">
     /// Execution order relative to other custom events. Lower values run - and draw - first.
     /// </param>
@@ -97,9 +83,9 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// Avalonia has not been configured with <see cref="AppBuilderExtensions.UseShapeEngine"/>.
     /// </exception>
     public AvaloniaSurface(
-        AvControl? content,
-        ScreenTexture? placementTexture,
-        AvaloniaSurfaceScaling scaling = AvaloniaSurfaceScaling.MatchTexture,
+        AvControl? content = null,
+        AvaloniaSurfaceAnchor? anchor = null,
+        bool scaleContent = false,
         int order = 0)
         : base(order)
     {
@@ -109,23 +95,22 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
                 $"Avalonia isn't set up yet. Call AppBuilder.Configure<...>().{nameof(AppBuilderExtensions.UseShapeEngine)}().SetupWithoutStarting() before creating an AvaloniaSurface.");
         }
 
+        var placementAnchor = anchor ?? AvaloniaSurfaceAnchor.FullScreen;
+
+        // Multi shader support so a game can post-process the interface without having to rebuild the
+        // surface for it.
+        placement = new ScreenTexture(placementAnchor.Stretch, placementAnchor.Position, ShaderSupportType.Multi);
+        placement.Initialize(Game.Instance.Window.CurScreenSize, Raylib.GetMousePosition());
+        placement.OnDrawUI += OnPlacementDrawUi;
+
+        Game.Instance.AddScreenTexture(placement);
+
         impl = new ShapeEngineTopLevelImpl(
             ShapeEnginePlatform.PlatformGraphics,
             new ShapeEngineClipboard(),
             ShapeEnginePlatform.Compositor);
 
         impl.CursorChanged += OnCursorChanged;
-
-        placement = placementTexture;
-        Scaling = scaling;
-
-        if (placement is not null)
-        {
-            // The texture self-initializes on its first Update, but the surface needs its dimensions
-            // now to size the framebuffer. Initialize is a no-op if the game got there first.
-            placement.Initialize(Game.Instance.Window.CurScreenSize, Raylib.GetMousePosition());
-            placement.OnDrawUI += OnPlacementDrawUi;
-        }
 
         SyncSize();
 
@@ -134,11 +119,14 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
             // No background of its own: the game has to show through everywhere the content doesn't
             // draw, and a hit test on the background would also steal the pointer from the game.
             Background = null,
-            TransparencyLevelHint = [WindowTransparencyLevel.Transparent, WindowTransparencyLevel.None],
-            Content = content
+            TransparencyLevelHint = [WindowTransparencyLevel.Transparent, WindowTransparencyLevel.None]
         };
 
         inputPump = new AvaloniaInputPump(impl);
+
+        this.content = content;
+        this.scaleContent = scaleContent;
+        ApplyContent();
 
         TopLevel.Prepare();
         TopLevel.StartRendering();
@@ -150,49 +138,53 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// <summary>The Avalonia control tree drawn over the game.</summary>
     public AvControl? Content
     {
-        get => TopLevel.Content as AvControl;
-        set => TopLevel.Content = value;
+        get => content;
+        set
+        {
+            if (ReferenceEquals(content, value)) return;
+
+            content = value;
+            ApplyContent();
+        }
     }
 
     /// <summary>
-    /// The screen texture that places and scales this surface, or <c>null</c> when it covers the window.
+    /// Whether the content is scaled to fit the surface rather than laid out at the surface's size.
     /// </summary>
     /// <remarks>
-    /// Change its mode, dimensions, anchor or shaders to move and resize the UI - the surface follows
-    /// on the next frame.
-    /// </remarks>
-    public ScreenTexture? PlacementTexture => placement;
-
-    /// <summary>How the UI is rasterized when the placement texture is drawn at a different size.</summary>
-    /// <remarks>Has no effect without a <see cref="PlacementTexture"/>.</remarks>
-    public AvaloniaSurfaceScaling Scaling { get; set; }
-
-    /// <summary>
-    /// The logical size the UI is authored for. Setting it scales the content to fill the surface
-    /// instead of reflowing the layout into a bigger or smaller area.
-    /// </summary>
-    /// <remarks>
-    /// Left <c>null</c>, a wider surface simply gives controls more room and text keeps its physical
-    /// size. Scaling is uniform and fits, so a surface whose aspect ratio differs from the design
-    /// leaves slack on one axis for the content's own alignment to take up.
+    /// Off, the content lays out against the surface's size: a larger surface gives controls more room
+    /// and text keeps its size. On, the content is measured at its natural size and scaled uniformly to
+    /// fit, so everything grows and shrinks together. The scaling is applied to the visual tree rather
+    /// than to a bitmap, so text stays crisp, and hit testing follows automatically.
     /// <para>
-    /// This drives Avalonia's <c>RenderScaling</c>, so content is re-rasterized at the scaled size
-    /// rather than magnified as a bitmap - text stays crisp at any scale.
+    /// Give the content an intrinsic size - a <c>Width</c> on the root control is usually enough. Scaled
+    /// content is measured unconstrained, so without one, wrapping text never wraps, the natural width
+    /// runs away, and everything is scaled down to fit it.
     /// </para>
     /// </remarks>
-    public Dimensions? DesignSize { get; set; }
+    public bool ScaleContent
+    {
+        get => scaleContent;
+        set
+        {
+            if (scaleContent == value) return;
 
-    /// <summary>An additional uniform scale applied to the content. Defaults to 1.</summary>
+            scaleContent = value;
+            ApplyContent();
+        }
+    }
+
+    /// <summary>
+    /// The screen texture this surface renders through.
+    /// </summary>
     /// <remarks>
-    /// Combines with <see cref="DesignSize"/>, and works on its own as a HUD-size or accessibility knob.
+    /// Owned by the surface and unloaded with it. Use it to attach shaders, or to change the draw order
+    /// against other screen textures.
     /// </remarks>
-    public double ContentScale { get; set; } = 1.0;
+    public ScreenTexture PlacementTexture => placement;
 
     /// <summary>The area of the window the UI is drawn into, in screen coordinates.</summary>
-    public SeRect DestinationRect
-        => placement is not null
-            ? placement.GetDestinationRect()
-            : new SeRect(0, 0, Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
+    public SeRect DestinationRect => placement.GetDestinationRect();
 
     /// <summary>Whether the cursor is currently over a hit-testable Avalonia control.</summary>
     public bool WantsPointer { get; private set; }
@@ -218,7 +210,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Runs after the engine has updated the screen textures, so a placement texture's dimensions and
+    /// Runs after the engine has updated the screen textures, so the placement texture's dimensions and
     /// scaled mouse position are already current for this frame.
     /// </remarks>
     protected override void PreHandleInput(GameTime time, Vector2 mousePosGame, Vector2 mousePosGameUi, Vector2 mousePosUi)
@@ -231,52 +223,21 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
         ApplyInputLocks();
     }
 
-    /// <inheritdoc/>
-    /// <remarks>
-    /// Rendering happens here rather than in an update hook because <c>PreDrawUi</c> is the only game
-    /// loop hook guaranteed to run exactly once per frame - with a fixed framerate or dynamic
-    /// substepping, the update hooks run anywhere from zero to several times.
-    /// <para>
-    /// When the surface renders into a placement texture this is skipped: the work happens in the
-    /// texture's own draw pass instead, which the engine runs earlier in the frame.
-    /// </para>
-    /// </remarks>
-    protected override void PreDrawUi(ScreenInfo info)
-    {
-        if (isDisposed || RendersIntoPlacementTexture) return;
-
-        RenderAvalonia();
-    }
-
-    /// <inheritdoc/>
-    protected override void PostDrawUi(ScreenInfo info)
-    {
-        if (isDisposed || RendersIntoPlacementTexture) return;
-
-        var destination = DestinationRect;
-        Present(new Rectangle(destination.X, destination.Y, destination.Width, destination.Height));
-    }
-
     /// <summary>
     /// Renders the UI and blits it into the placement texture, from inside the texture's draw pass.
     /// </summary>
     /// <remarks>
-    /// Running here rather than in <c>PreDrawUi</c> keeps the UI a frame fresh: the engine draws screen
-    /// textures before it begins the window's draw pass, so a render scheduled later would be blitted
-    /// one frame late. The Skia pass is safe inside the texture's render target because
+    /// The engine draws screen textures before it begins the window's draw pass, so rendering here keeps
+    /// the UI a frame fresh. The Skia pass is safe inside the texture's render target because
     /// <c>RlglStateGuard</c> restores whichever framebuffer was bound.
     /// </remarks>
     private void OnPlacementDrawUi(ScreenInfo info, ScreenTexture texture)
     {
-        if (isDisposed || !RendersIntoPlacementTexture) return;
+        if (isDisposed) return;
 
         RenderAvalonia();
         Present(new Rectangle(0, 0, texture.Width, texture.Height));
     }
-
-    /// <summary>Whether the UI is blitted into the placement texture rather than straight to screen.</summary>
-    private bool RendersIntoPlacementTexture
-        => placement is not null && Scaling == AvaloniaSurfaceScaling.MatchTexture;
 
     /// <summary>Advances Avalonia by one frame and rasterizes it into the surface framebuffer.</summary>
     /// <remarks>
@@ -311,101 +272,58 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     #endregion
 
-    #region Sizing, input arbitration and cursor
+    #region Content, sizing, input arbitration and cursor
 
-    /// <summary>
-    /// Matches the surface framebuffer to whatever it is currently being drawn into, and works out the
-    /// scaling that turns it into Avalonia's layout space.
-    /// </summary>
+    /// <summary>Puts the content into the top level, wrapped for scaling when asked for.</summary>
     /// <remarks>
-    /// Without a design size the two scaling modes produce the same layout space - the placement
-    /// texture's resolution, or the window size when there is no placement texture - and differ only in
-    /// rasterization. A design size overrides that and makes the layout space fixed instead.
+    /// The wrapper is reused and detached rather than recreated, because a control cannot be added to a
+    /// new parent while the old one still holds it.
     /// </remarks>
-    private void SyncSize()
+    private void ApplyContent()
     {
-        PixelSize renderSize;
-        double renderScaling;
+        scaleBox.Child = null;
+        TopLevel.Content = null;
 
-        // The coordinate space incoming mouse positions arrive in, which is not necessarily the space
-        // Avalonia lays out in once DesignSize or ContentScale are involved.
-        Vector2 pointerSpace;
+        if (content is null) return;
 
-        if (placement is null)
+        if (scaleContent)
         {
-            var renderWidth = Raylib.GetRenderWidth();
-            var renderHeight = Raylib.GetRenderHeight();
-            var screenWidth = Raylib.GetScreenWidth();
-            var screenHeight = Raylib.GetScreenHeight();
-
-            // Derived from the framebuffer/window ratio rather than GetWindowScaleDPI so it stays 1.0
-            // when ShapeEngine's high DPI window flag is off, which is when raylib renders at logical
-            // size.
-            renderSize = new PixelSize(Math.Max(renderWidth, 1), Math.Max(renderHeight, 1));
-            renderScaling = screenWidth > 0 ? renderWidth / (double)screenWidth : 1.0;
-            pointerSpace = new Vector2(Math.Max(screenWidth, 1), Math.Max(screenHeight, 1));
+            scaleBox.Child = content;
+            TopLevel.Content = scaleBox;
         }
         else
         {
-            var textureSize = new PixelSize(Math.Max(placement.Width, 1), Math.Max(placement.Height, 1));
-            pointerSpace = new Vector2(textureSize.Width, textureSize.Height);
-
-            if (Scaling == AvaloniaSurfaceScaling.MatchTexture)
-            {
-                // One Avalonia pixel per texture pixel; the texture handles the scaling to the screen.
-                renderSize = textureSize;
-                renderScaling = 1.0;
-            }
-            else
-            {
-                // Rasterize at the size actually shown on screen, then scale layout back down so the
-                // UI still lays out in the texture's coordinate space.
-                var destination = placement.GetDestinationRect();
-                var dpi = Raylib.GetWindowScaleDPI();
-
-                renderSize = new PixelSize(
-                    Math.Max((int)MathF.Round(destination.Width * dpi.X), 1),
-                    Math.Max((int)MathF.Round(destination.Height * dpi.Y), 1));
-                renderScaling = renderSize.Width / (double)textureSize.Width;
-            }
+            TopLevel.Content = content;
         }
+    }
 
-        // A design size pins layout to fixed dimensions and scales the content to fill the surface,
-        // instead of letting the layout expand into it. Uniform, and fitting rather than filling, so
-        // nothing is cropped when the aspect ratios disagree.
-        if (DesignSize is { } design && design.Width > 0 && design.Height > 0)
-        {
-            renderScaling = Math.Min(
-                renderSize.Width / (double)design.Width,
-                renderSize.Height / (double)design.Height);
-        }
+    /// <summary>Matches the surface framebuffer to the placement texture.</summary>
+    /// <remarks>
+    /// The texture is sized in physical pixels, so the scaling factor is the window's DPI scale. That
+    /// leaves Avalonia laying out in device independent pixels while rasterizing at full resolution.
+    /// </remarks>
+    private void SyncSize()
+    {
+        var size = new PixelSize(Math.Max(placement.Width, 1), Math.Max(placement.Height, 1));
 
-        renderScaling *= ContentScale;
+        var scaling = Raylib.GetWindowScaleDPI().X;
+        if (scaling <= 0f || Single.IsNaN(scaling)) scaling = 1f;
 
-        if (renderScaling <= 0.0 || Double.IsNaN(renderScaling)) renderScaling = 1.0;
-
-        impl.SetRenderSize(renderSize, renderScaling);
-
-        // Avalonia's client size is the framebuffer divided by the scaling, so it only matches the
-        // pointer space when nothing is scaling the content. Cache the correction for the pointer.
-        pointerScale = new Vector2(
-            (float)(impl.ClientSize.Width / pointerSpace.X),
-            (float)(impl.ClientSize.Height / pointerSpace.Y));
+        impl.SetRenderSize(size, scaling);
     }
 
     /// <summary>The cursor position in Avalonia's client coordinate space.</summary>
     /// <remarks>
-    /// With a placement texture the engine has already mapped the window mouse position into texture
-    /// space for the texture's mode, letterbox offsets included. Positions outside the texture simply
-    /// fail to hit test, which is the behaviour we want.
+    /// The engine has already mapped the window mouse position into the texture's pixel space for its
+    /// anchor, so all that remains is the conversion to device independent pixels. Positions outside the
+    /// texture simply fail to hit test, which is the behaviour we want.
     /// </remarks>
     private Point GetPointerPosition()
     {
-        var position = placement is not null
-            ? placement.GameUiScreenInfo.MousePos
-            : Raylib.GetMousePosition();
+        var position = placement.GameUiScreenInfo.MousePos;
+        var scaling = impl.RenderScaling;
 
-        return new Point(position.X * pointerScale.X, position.Y * pointerScale.Y);
+        return new Point(position.X / scaling, position.Y / scaling);
     }
 
     private void UpdateCapture()
@@ -455,7 +373,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     #endregion
 
-    /// <summary>Tears down the Avalonia top level and releases its GPU resources.</summary>
+    /// <summary>Tears down the Avalonia top level and the screen texture, releasing their GPU resources.</summary>
     /// <remarks>Remove the surface from the game with <c>Game.RemoveCustomEvent</c> first.</remarks>
     public void Dispose()
     {
@@ -466,7 +384,9 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
         if (currentCursor != MouseCursor.Default) Raylib.SetMouseCursor(MouseCursor.Default);
 
-        if (placement is not null) placement.OnDrawUI -= OnPlacementDrawUi;
+        placement.OnDrawUI -= OnPlacementDrawUi;
+        Game.Instance.RemoveScreenTexture(placement);
+        placement.Unload();
 
         impl.CursorChanged -= OnCursorChanged;
         TopLevel.StopRendering();

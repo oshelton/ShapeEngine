@@ -24,11 +24,10 @@ public abstract class AvaloniaExampleSceneBase : ExampleScene
 {
     private readonly List<(Vector2 Position, Vector2 Velocity, float Radius, ColorRgba Color)> circles = [];
     private readonly List<AvaloniaSurface> surfaces = [];
-    private readonly List<ScreenTexture> placements = [];
 
     /// <summary>
-    /// Creates the scene's surfaces. The base class registers them and their placement textures, and
-    /// tears them down again on deactivation.
+    /// Creates the scene's surfaces. The base class registers them and disposes them on deactivation;
+    /// each surface manages its own screen texture.
     /// </summary>
     protected abstract IReadOnlyList<AvaloniaSurface> CreateSurfaces();
 
@@ -45,11 +44,6 @@ public abstract class AvaloniaExampleSceneBase : ExampleScene
         {
             surfaces.Add(surface);
             Game.Instance.AddCustomEvent(surface);
-
-            if (surface.PlacementTexture is not { } placement) continue;
-
-            placements.Add(placement);
-            Game.Instance.AddScreenTexture(placement);
         }
 
         SpawnCircles();
@@ -63,14 +57,7 @@ public abstract class AvaloniaExampleSceneBase : ExampleScene
             surface.Dispose();
         }
 
-        foreach (var placement in placements)
-        {
-            Game.Instance.RemoveScreenTexture(placement);
-            placement.Unload();
-        }
-
         surfaces.Clear();
-        placements.Clear();
         circles.Clear();
 
         base.OnDeactivate();
