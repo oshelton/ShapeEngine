@@ -15,10 +15,11 @@ namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 /// An Avalonia panel hosting animated ShapeEngine drawing, with Avalonia controls steering it.
 /// </summary>
 /// <remarks>
-/// The artwork is drawn with ShapeEngine's own shape functions into texture views, so it sits in the
-/// control tree like any other control - it scales with the surface, is clipped by its parent, and has
-/// Avalonia content layered over it. Both view kinds are shown: an animated one for the orbits and a
-/// static one for the emblem, which only redraws when the button asks it to.
+/// The artwork is drawn with ShapeEngine's own shape functions, so it sits in the control tree like any
+/// other control - it scales with the surface, is clipped by its parent, and has Avalonia content layered
+/// over it. All three view kinds are shown: an animated texture view for the orbits, a static one for the
+/// emblem which only redraws when the button asks it to, and a direct view for the bars, which skips the
+/// texture entirely.
 /// </remarks>
 public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
 {
@@ -70,7 +71,7 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
                             .TextWrapping(TextWrapping.Wrap)
                             .Foreground(Brushes.White),
                         new TextBlock()
-                            .Text("The artwork below is drawn with ShapeEngine's shape functions into a render texture, then displayed like any other Avalonia content.")
+                            .Text("Everything below is drawn with ShapeEngine's shape functions, sitting in the control tree like any other Avalonia content.")
                             .TextWrapping(TextWrapping.Wrap)
                             .Foreground(Brushes.DarkGray),
                         BuildArtwork(),
@@ -98,6 +99,12 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
                             .HorizontalAlignment(HorizontalAlignment.Stretch)
                             .HorizontalContentAlignment(HorizontalAlignment.Center)
                             .OnClick(_ => RegenerateEmblem()),
+                        new TextBlock()
+                            .Text("Direct view - no texture, rotated and clipped")
+                            .FontSize(12)
+                            .TextWrapping(TextWrapping.Wrap)
+                            .Foreground(Brushes.DarkGray),
+                        BuildDirectArtwork(),
                         new TextBlock()
                             .Ref(out statusText)
                             .TextWrapping(TextWrapping.Wrap)
@@ -182,6 +189,44 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
         // A pulsing core, so something is moving even with the rings turned off.
         var pulse = 0.5f + 0.5f * MathF.Sin(elapsed * 2.4f);
         new Circle(center, unit * (0.05f + pulse * 0.03f)).Draw(new ColorRgba(255, 255, 255, 200), 1.0f);
+    }
+
+    /// <summary>
+    /// Drawing straight into Avalonia's framebuffer, with no texture in between.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately awkward placement: the whole panel is inside a <c>Viewbox</c>, this sits inside a
+    /// clipping border, and the view itself is rotated. If the transform or clip mapping were wrong the
+    /// bars would be the wrong size, in the wrong place, or spilling outside the border.
+    /// </remarks>
+    private Control BuildDirectArtwork()
+        => new Border()
+            .Height(90)
+            .CornerRadius(new CornerRadius(8))
+            .ClipToBounds(true)
+            .Child(
+                new ShapeEngineDirectView
+                {
+                    DrawContent = DrawDirectArtwork,
+                    RenderTransform = new RotateTransform(-8)
+                });
+
+    /// <summary>Draws a row of bars in the control's own coordinate space.</summary>
+    private void DrawDirectArtwork(SeRect bounds)
+    {
+        const int barCount = 14;
+
+        var barWidth = bounds.Width / (barCount * 1.6f);
+
+        for (var i = 0; i < barCount; i++)
+        {
+            var phase = elapsed * 2f + i * 0.45f;
+            var height = bounds.Height * (0.25f + 0.35f * (0.5f + 0.5f * MathF.Sin(phase)));
+            var x = bounds.X + bounds.Width * (i + 0.5f) / barCount;
+
+            var color = OrbitColors[i % OrbitColors.Length];
+            new SeRect(x - barWidth * 0.5f, bounds.Bottom - height, barWidth, height).Draw(color.SetAlpha(220));
+        }
     }
 
     /// <summary>Picks a new emblem and asks the static view to draw it.</summary>

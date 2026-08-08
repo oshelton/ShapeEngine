@@ -27,6 +27,12 @@ internal readonly struct RlglStateGuard : IDisposable
         this.previousViewport = previousViewport;
     }
 
+    /// <summary>Width of the render target that was bound when the guard was entered.</summary>
+    public int ViewportWidth => previousViewport[2];
+
+    /// <summary>Height of the render target that was bound when the guard was entered.</summary>
+    public int ViewportHeight => previousViewport[3];
+
     /// <summary>
     /// Flushes raylib's pending geometry and records the state that has to survive the Skia pass.
     /// </summary>
