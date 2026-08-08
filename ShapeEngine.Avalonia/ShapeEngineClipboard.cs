@@ -5,12 +5,9 @@ using Raylib_cs;
 namespace ShapeEngine.Avalonia;
 
 /// <summary>
-/// An <see cref="IClipboard"/> backed by raylib's clipboard functions.
+/// An <see cref="IClipboard"/> backed by raylib's clipboard functions. Plain text only, which is what
+/// the built-in text controls need; anything richer is dropped.
 /// </summary>
-/// <remarks>
-/// raylib exposes plain text only, so anything richer is dropped on set and never offered on get.
-/// That covers what the built-in text controls need.
-/// </remarks>
 internal sealed class ShapeEngineClipboard : IClipboard
 {
     public Task ClearAsync()

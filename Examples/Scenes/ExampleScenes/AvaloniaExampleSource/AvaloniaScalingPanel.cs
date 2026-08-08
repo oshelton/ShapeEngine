@@ -7,11 +7,11 @@ using Avalonia.Media;
 namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 
 /// <summary>
-/// Controls for switching a surface between the content sizing and rasterization options at runtime.
+/// Controls for switching a surface between the content sizing options at runtime.
 /// </summary>
 /// <remarks>
-/// The text samples are there to judge the result: with content scaling on, they grow with the surface;
-/// with it off, they keep their size and the layout simply gets more room.
+/// The text samples are there to judge the result: with content scaling on they grow with the surface,
+/// with it off they keep their size and the layout simply gets more room.
 /// </remarks>
 public sealed class AvaloniaScalingPanel : ViewBase
 {

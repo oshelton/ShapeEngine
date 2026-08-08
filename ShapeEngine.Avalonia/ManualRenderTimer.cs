@@ -6,9 +6,8 @@ namespace ShapeEngine.Avalonia;
 /// An <see cref="IRenderTimer"/> that only ticks when the game loop tells it to.
 /// </summary>
 /// <remarks>
-/// Avalonia normally drives rendering from its own timer on a render thread. Here the game loop owns
-/// the frame rate and the OpenGL context, so Avalonia has to render at the point in the frame we
-/// choose and on the thread we choose.
+/// Avalonia normally drives rendering from its own timer on a render thread, but here the game loop owns
+/// the frame rate and the OpenGL context.
 /// </remarks>
 internal sealed class ManualRenderTimer : IRenderTimer
 {

@@ -8,9 +8,8 @@ namespace ShapeEngine.Avalonia.Gpu;
 /// state back afterwards.
 /// </summary>
 /// <remarks>
-/// raylib and Skia both assume they own the GL context. raylib caches a lot of that state in rlgl and
-/// only re-applies it when it thinks it changed, so anything Skia touches has to be restored by hand.
-/// This is the OpenGL counterpart to the image barriers a Vulkan bridge would need.
+/// raylib and Skia both assume they own the GL context. rlgl caches its state and only re-applies what
+/// it believes changed, so anything Skia touches has to be restored by hand.
 /// </remarks>
 internal readonly struct RlglStateGuard : IDisposable
 {
@@ -37,20 +36,20 @@ internal readonly struct RlglStateGuard : IDisposable
     /// Flushes raylib's pending geometry and records the state that has to survive the Skia pass.
     /// </summary>
     /// <remarks>
-    /// The framebuffer and viewport are read back from OpenGL rather than from rlgl. rlgl's
+    /// The framebuffer and viewport are read back from OpenGL rather than from rlgl, whose
     /// <c>GetFramebufferWidth</c> keeps reporting the last render texture's size after that texture's
-    /// draw pass has ended, so restoring from it shrinks everything drawn afterwards into a corner.
+    /// draw pass has ended - restoring from it shrinks everything drawn afterwards into a corner.
     /// </remarks>
     public static RlglStateGuard Enter(GlInterface gl)
     {
-        // Anything still queued in rlgl would otherwise be drawn later with Skia's shader,
-        // blend function and framebuffer binding rather than raylib's.
+        // Anything still queued would otherwise be drawn with Skia's shader, blend function and
+        // framebuffer binding rather than raylib's.
         Rlgl.DrawRenderBatchActive();
 
         int framebuffer;
         gl.GetIntegerv(GlConsts.GL_FRAMEBUFFER_BINDING, out framebuffer);
 
-        // GL_VIEWPORT writes four integers, so the query needs a buffer with room for all of them.
+        // GL_VIEWPORT writes four integers, so the query needs room for all of them.
         var viewport = new int[4];
         gl.GetIntegerv(GlViewport, out viewport[0]);
 
@@ -60,8 +59,8 @@ internal readonly struct RlglStateGuard : IDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        // raylib re-binds its shader, VAO and textures on the next batch draw, so those need no help.
-        // Everything below is state raylib either caches or never sets defensively.
+        // The shader, VAO and textures are re-bound on the next batch draw. Everything below is state
+        // raylib either caches or never sets defensively.
         gl.BindFramebuffer(GlConsts.GL_FRAMEBUFFER, previousFramebuffer);
         gl.Viewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
 

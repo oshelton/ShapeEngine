@@ -7,12 +7,9 @@ using ShapeEngine.Core.Structs;
 namespace Examples.Scenes.ExampleScenes;
 
 /// <summary>
-/// A surface covering the whole window, with the panel positioned by Avalonia layout alone.
+/// A surface covering the whole window, with the panel positioned by Avalonia layout alone. The default
+/// arrangement when no anchor is given.
 /// </summary>
-/// <remarks>
-/// The default arrangement: no anchor is given, so the surface fills the window and the UI is placed the
-/// way it would be in any Avalonia application.
-/// </remarks>
 public class AvaloniaFullWindowExample : AvaloniaExampleSceneBase
 {
     private AvaloniaSurface? surface;

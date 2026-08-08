@@ -8,9 +8,8 @@ namespace Examples.Scenes.ExampleScenes;
 /// A surface occupying a region of the screen defined as a fraction of the window.
 /// </summary>
 /// <remarks>
-/// The anchor sizes the surface to a proportion of the window and pins it to a relative position, so the
-/// UI keeps its place and proportions as the window resizes. The usual choice for a HUD panel that
-/// should own one corner of the screen rather than the whole thing.
+/// The usual choice for a HUD panel that should own one corner of the screen: the anchor keeps its place
+/// and proportions as the window resizes.
 /// </remarks>
 public class AvaloniaAnchoredRegionExample : AvaloniaExampleSceneBase
 {

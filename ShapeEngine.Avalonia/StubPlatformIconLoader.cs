@@ -7,8 +7,8 @@ namespace ShapeEngine.Avalonia;
 /// An <see cref="IPlatformIconLoader"/> that keeps icon data around without ever displaying it.
 /// </summary>
 /// <remarks>
-/// Avalonia resolves this service when an application sets a window icon. The Avalonia content here is
-/// hosted inside the raylib window, whose icon is set through ShapeEngine, so there is nothing to do.
+/// Resolved when an application sets a window icon. The content here lives inside the raylib window,
+/// whose icon is set through ShapeEngine, so there is nothing to do.
 /// </remarks>
 internal sealed class StubPlatformIconLoader : IPlatformIconLoader
 {

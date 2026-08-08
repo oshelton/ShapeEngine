@@ -5,13 +5,13 @@ using ShapeEngine.Core.Structs;
 namespace Examples.Scenes.ExampleScenes;
 
 /// <summary>
-/// Animated ShapeEngine drawing hosted inside an Avalonia control.
+/// ShapeEngine drawing hosted inside Avalonia controls.
 /// </summary>
 /// <remarks>
 /// The reverse of the other scenes: instead of Avalonia drawing over the game, the game's own drawing
-/// functions produce content that sits inside the Avalonia control tree. It goes through a render
-/// texture rather than handing the OpenGL context between the two renderers, which costs a per-frame
-/// read back but keeps raylib and Skia entirely out of each other's way.
+/// functions produce content that sits inside the Avalonia control tree. Shows both routes - the texture
+/// views, which keep raylib and Skia out of each other's way, and the direct view, which hands raylib
+/// Avalonia's framebuffer.
 /// </remarks>
 public class AvaloniaEmbeddedDrawingExample : AvaloniaExampleSceneBase
 {
@@ -23,15 +23,15 @@ public class AvaloniaEmbeddedDrawingExample : AvaloniaExampleSceneBase
     public AvaloniaEmbeddedDrawingExample()
     {
         Title = "Avalonia - Embedded Drawing";
-        Description = "ShapeEngine shape drawing animated inside an Avalonia control";
+        Description = "ShapeEngine shape drawing inside Avalonia controls, through a texture and direct";
     }
 
     protected override IReadOnlyList<AvaloniaSurface> CreateSurfaces()
     {
         panel = new AvaloniaEmbeddedDrawingPanel();
 
-        // Scales the whole panel, artwork included: the texture view sizes its render texture from the
-        // surface's render scaling, so the drawing is rasterized at the scaled size rather than magnified.
+        // Scales the whole panel, artwork included. Both view kinds take their resolution from the
+        // surface's render scaling, so the drawing is rasterized at the scaled size, not magnified.
         surface = new AvaloniaSurface(panel, Anchor, scaleContent: true);
 
         return [surface];

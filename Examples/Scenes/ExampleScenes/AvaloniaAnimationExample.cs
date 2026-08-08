@@ -8,9 +8,9 @@ namespace Examples.Scenes.ExampleScenes;
 /// Animated Avalonia controls and content running over a moving game scene.
 /// </summary>
 /// <remarks>
-/// Avalonia has no render thread here: its animation clock is advanced by the surface's per-frame render
-/// tick, so this is the scene that shows the clock actually working. The scene also drives the
-/// transition-based animations directly, which shows game state animating Avalonia content.
+/// Avalonia has no render thread here - its animation clock is advanced by the surface's per-frame
+/// render tick, so this is the scene that shows the clock working. The scene also triggers the
+/// transitions itself, showing game state animating Avalonia content.
 /// </remarks>
 public class AvaloniaAnimationExample : AvaloniaExampleSceneBase
 {

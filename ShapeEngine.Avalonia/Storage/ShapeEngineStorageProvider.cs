@@ -6,9 +6,9 @@ namespace ShapeEngine.Avalonia.Storage;
 /// An <see cref="IStorageProvider"/> that resolves paths and well-known folders through the BCL.
 /// </summary>
 /// <remarks>
-/// raylib has no native file pickers, so the interactive Open/Save methods are unsupported. What this
-/// does provide is the non-interactive half of the API - resolving bookmarks, paths and well-known
-/// folders - which is what controls need to work with files a game hands them.
+/// raylib has no native file pickers, so the interactive Open/Save methods are unsupported. The
+/// non-interactive half - bookmarks, paths and well-known folders - is what controls need to work with
+/// files a game hands them.
 /// </remarks>
 internal sealed class ShapeEngineStorageProvider : IStorageProvider
 {

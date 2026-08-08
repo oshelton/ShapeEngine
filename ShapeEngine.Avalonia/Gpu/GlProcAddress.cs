@@ -6,9 +6,8 @@ namespace ShapeEngine.Avalonia.Gpu;
 /// Resolves OpenGL entry points from the context raylib has already made current on the calling thread.
 /// </summary>
 /// <remarks>
-/// This is the only platform specific piece of the integration. Windows resolves through WGL;
-/// adding Linux (<c>glXGetProcAddressARB</c>) or macOS (<c>dlsym</c>) support means extending this
-/// class and nothing else.
+/// The only platform specific piece of the integration. Adding Linux (<c>glXGetProcAddressARB</c>) or
+/// macOS (<c>dlsym</c>) support means extending this class and nothing else.
 /// </remarks>
 internal static class GlProcAddress
 {
@@ -20,12 +19,11 @@ internal static class GlProcAddress
     private static extern IntPtr WglGetProcAddress(string name);
 
     /// <summary>
-    /// Looks up <paramref name="name"/> and returns its address, or <see cref="IntPtr.Zero"/> when the
-    /// function is not available.
+    /// Looks up <paramref name="name"/>, returning <see cref="IntPtr.Zero"/> when it is not available.
     /// </summary>
     /// <remarks>
-    /// A GL context must be current on the calling thread. Call this only after <c>Raylib.InitWindow</c>
-    /// and only from the thread running the game loop.
+    /// A GL context must be current on the calling thread, so call this only after
+    /// <c>Raylib.InitWindow</c> and only from the thread running the game loop.
     /// </remarks>
     public static IntPtr Get(string name)
     {
@@ -38,7 +36,7 @@ internal static class GlProcAddress
         var address = WglGetProcAddress(name);
 
         // wglGetProcAddress reports failure as 0, 1, 2, 3 or -1, and never resolves the OpenGL 1.1
-        // functions that ship in opengl32.dll itself. Both cases fall through to the module export.
+        // functions exported by opengl32.dll itself. Both cases fall through to the module export.
         if (address != IntPtr.Zero
             && address != 1
             && address != 2

@@ -77,9 +77,8 @@ internal sealed class ShapeEngineTopLevelImpl : ITopLevelImpl
 
     /// <summary>Resizes the top level, recreating the render surface only if the pixel size changed.</summary>
     /// <remarks>
-    /// Scaling can change every frame - an animated content scale, for instance - while the framebuffer
-    /// stays the same size, so a scaling-only change updates the surface in place rather than
-    /// reallocating its texture and renderbuffer.
+    /// Scaling can change every frame while the framebuffer stays the same size, so a scaling-only
+    /// change updates the surface in place rather than reallocating its texture and renderbuffer.
     /// </remarks>
     public void SetRenderSize(PixelSize newRenderSize, double newRenderScaling)
     {
@@ -187,7 +186,7 @@ internal sealed class ShapeEngineTopLevelImpl : ITopLevelImpl
 
     /// <summary>Asks Avalonia to render the given area now.</summary>
     /// <remarks>
-    /// This is what drives rendering. Avalonia renders in response to <see cref="Paint"/>, and with no
+    /// This is what drives rendering: Avalonia renders in response to <see cref="Paint"/>, and with no
     /// OS window there are no paint messages to raise it.
     /// </remarks>
     public void OnDraw(Rect rect)
@@ -201,9 +200,8 @@ internal sealed class ShapeEngineTopLevelImpl : ITopLevelImpl
 
     #region ITopLevelImpl coordinate space and services
 
-    // Only correct for a surface covering the window; a placed surface is also offset by its
-    // destination rectangle. Avalonia uses these for real screen coordinates, which this backend has
-    // no meaningful answer for anyway - it has no OS window of its own.
+    // Only correct for a surface covering the window; an anchored one is also offset by its destination
+    // rectangle. Avalonia wants real screen coordinates, which a backend with no OS window cannot give.
     Point ITopLevelImpl.PointToClient(PixelPoint point) => point.ToPoint(RenderScaling);
 
     PixelPoint ITopLevelImpl.PointToScreen(Point point) => PixelPoint.FromPoint(point, RenderScaling);
@@ -218,9 +216,8 @@ internal sealed class ShapeEngineTopLevelImpl : ITopLevelImpl
     }
 
     /// <remarks>
-    /// Returning <c>null</c> makes Avalonia host menus, tooltips and combo box drop-downs as overlays
-    /// inside this top level instead of asking for real OS windows, which is what we want for content
-    /// composited into the game.
+    /// <c>null</c> makes Avalonia host menus, tooltips and combo box drop-downs as overlays inside this
+    /// top level rather than asking for real OS windows.
     /// </remarks>
     IPopupImpl? ITopLevelImpl.CreatePopup() => null;
 

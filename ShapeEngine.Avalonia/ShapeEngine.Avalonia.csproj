@@ -19,11 +19,9 @@
   </PropertyGroup>
 
   <!--
-    Hosting Avalonia inside another renderer requires implementing Avalonia's platform backend
-    interfaces (IPlatformRenderSurface and friends), which are sealed off from user code in
-    Avalonia 12 unless these opt-ins are set. This is the same mechanism Estragonia uses for its
-    Godot backend. The trade-off is that the Avalonia version must be pinned exactly - see the
-    PackageReference versions below, which are deliberately not floating.
+    Hosting Avalonia inside another renderer means implementing its platform backend interfaces
+    (IPlatformRenderSurface and friends), which Avalonia 12 seals off without these opt-ins. The
+    trade-off is that the Avalonia version has to be pinned exactly, hence the fixed versions below.
   -->
   <PropertyGroup>
     <AvaloniaAccessUnstablePrivateApis>true</AvaloniaAccessUnstablePrivateApis>

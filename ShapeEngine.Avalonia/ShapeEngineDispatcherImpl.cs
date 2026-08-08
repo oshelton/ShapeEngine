@@ -7,16 +7,15 @@ namespace ShapeEngine.Avalonia;
 /// An <see cref="IDispatcherImpl"/> that runs Avalonia's dispatcher work on the game loop thread.
 /// </summary>
 /// <remarks>
-/// ShapeEngine has no message loop or synchronization context to post to, so signals and timers are
-/// queued and drained once per frame from <see cref="Pump"/>. Everything Avalonia schedules on
-/// <c>Dispatcher.UIThread</c> therefore runs on the thread that owns the OpenGL context.
+/// ShapeEngine has no message loop to post to, so signals and timers are queued and drained once per
+/// frame from <see cref="Pump"/>. Everything Avalonia schedules on <c>Dispatcher.UIThread</c> therefore
+/// runs on the thread that owns the OpenGL context.
 /// </remarks>
 internal sealed class ShapeEngineDispatcherImpl : IDispatcherImpl
 {
     /// <summary>
-    /// Upper bound on how many times a single <see cref="Pump"/> re-enters <see cref="Signaled"/>.
-    /// Handlers commonly signal again, and draining those in the same frame avoids adding a frame of
-    /// latency per continuation; the cap stops a self-perpetuating signal from stalling the game.
+    /// Handlers commonly signal again; draining those in the same frame avoids a frame of latency per
+    /// continuation, and the cap stops a self-perpetuating signal from stalling the game.
     /// </summary>
     private const int MaxSignalsPerPump = 16;
 

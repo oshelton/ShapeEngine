@@ -9,9 +9,9 @@ public static class AppBuilderExtensions
     /// Configures Avalonia to render through ShapeEngine's raylib window instead of creating its own.
     /// </summary>
     /// <remarks>
-    /// Follow this with <see cref="AppBuilder.SetupWithoutStarting"/> - the game loop drives Avalonia,
-    /// so Avalonia must not take over the thread. Call both after the ShapeEngine <c>Game</c> has
-    /// created its window, since the OpenGL context has to exist first.
+    /// Follow this with <see cref="AppBuilder.SetupWithoutStarting"/>, since the game loop drives
+    /// Avalonia and Avalonia must not take over the thread. Both go after the ShapeEngine <c>Game</c>
+    /// has created its window - the OpenGL context has to exist first.
     /// </remarks>
     /// <example>
     /// <code>

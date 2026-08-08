@@ -13,13 +13,10 @@ namespace Examples.Scenes.ExampleScenes;
 /// Four independent Avalonia surfaces on screen at once, each with its own anchor and settings.
 /// </summary>
 /// <remarks>
-/// Every surface is a separate Avalonia top level with its own control tree, focus and input state, all
-/// sharing raylib's single OpenGL context and each owning its own screen texture. Each keeps its own
-/// input capture, so typing into one panel's text box does not disturb the others or the game.
-/// <para>
-/// The three anchored surfaces differ in whether they scale their content, so the effect is visible side
-/// by side; the fourth covers the window and draws over them.
-/// </para>
+/// Every surface is a separate Avalonia top level with its own control tree, focus, input capture and
+/// screen texture, all sharing raylib's single OpenGL context - so typing into one panel's text box
+/// disturbs neither the others nor the game. Three are anchored and differ in whether they scale their
+/// content; the fourth covers the window and draws over them.
 /// </remarks>
 public class AvaloniaMultipleSurfacesExample : AvaloniaExampleSceneBase
 {

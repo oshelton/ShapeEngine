@@ -31,10 +31,9 @@ internal static class ShapeEnginePlatform
     /// </remarks>
     public static void Initialize()
     {
-        // Avalonia installs its synchronization context on this thread, which ShapeEngine leaves unset.
-        // Without it, anything routing continuations through the current context fails outright -
-        // Animation.RunAsync throws, and awaits inside event handlers resume off the game thread.
-        // Work posted to it is drained by PumpDispatcher once per frame.
+        // ShapeEngine leaves this thread without a synchronization context, so anything routing
+        // continuations through the current one fails outright - Animation.RunAsync throws, and awaits
+        // in event handlers resume off the game thread. PumpDispatcher drains what gets posted to it.
         AvaloniaSynchronizationContext.AutoInstall = true;
 
         var graphics = new RaylibPlatformGraphics();

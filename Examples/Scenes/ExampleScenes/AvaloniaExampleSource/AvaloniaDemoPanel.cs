@@ -11,7 +11,7 @@ namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 /// A panel of real Avalonia controls, used by most of the Avalonia examples.
 /// </summary>
 /// <remarks>
-/// Deliberately exercises the parts of the integration that are easy to get wrong: a translucent
+/// Every control here covers a part of the integration that is easy to get wrong: a translucent
 /// background (premultiplied alpha), rounded corners (Skia's stencil buffer), a <see cref="TextBox"/>
 /// (text input, focus arbitration, I-beam cursor), a <see cref="ComboBox"/> (overlay popups), a
 /// scrolling <see cref="ListBox"/> (mouse wheel) and an indeterminate <see cref="ProgressBar"/> (the

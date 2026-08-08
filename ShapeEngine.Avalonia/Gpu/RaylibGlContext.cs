@@ -6,9 +6,8 @@ namespace ShapeEngine.Avalonia.Gpu;
 /// Presents the OpenGL context raylib created to Avalonia as an <see cref="IGlContext"/>.
 /// </summary>
 /// <remarks>
-/// There is no context management to do here. raylib makes its context current on the thread running
-/// the game loop and keeps it current for the lifetime of the window, and Avalonia is only ever driven
-/// from that same thread, so making current and ensuring current are both no-ops.
+/// There is no context management to do: raylib keeps its context current on the game loop thread for
+/// the window's lifetime, and Avalonia is only ever driven from that same thread.
 /// </remarks>
 internal sealed class RaylibGlContext : IGlContext
 {
@@ -20,10 +19,7 @@ internal sealed class RaylibGlContext : IGlContext
     /// <summary>No multisampling: the surface is rendered at native resolution and composited 1:1.</summary>
     public int SampleCount => 1;
 
-    /// <summary>
-    /// Reported as 8 because <see cref="RaylibGlSurface"/> attaches a packed depth24/stencil8
-    /// renderbuffer. Skia needs a stencil buffer for clipping and anti-aliasing.
-    /// </summary>
+    /// <summary>Matches the packed depth24/stencil8 renderbuffer <see cref="RaylibGlSurface"/> attaches.</summary>
     public int StencilSize => 8;
 
     public bool CanCreateSharedContext => false;

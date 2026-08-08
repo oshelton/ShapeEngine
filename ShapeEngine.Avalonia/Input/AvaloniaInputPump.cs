@@ -9,11 +9,10 @@ namespace ShapeEngine.Avalonia.Input;
 
 /// <summary>Feeds raylib's input state into an Avalonia top level once per frame.</summary>
 /// <remarks>
-/// Input is read straight from raylib rather than from ShapeEngine's <c>InputSystem</c>. That matters
-/// for typed characters: <c>Raylib.GetCharPressed</c> drains a queue, and ShapeEngine's
-/// <c>KeyboardDevice</c> drains it too - but only while unlocked. <see cref="AvaloniaSurface"/> locks
-/// the ShapeEngine devices whenever the UI has capture, which leaves the queue intact for us and
-/// suppresses game input at the same time.
+/// Input is read straight from raylib rather than from ShapeEngine's <c>InputSystem</c>, which matters
+/// for typed characters: <c>Raylib.GetCharPressed</c> drains a queue that ShapeEngine's
+/// <c>KeyboardDevice</c> also drains, but only while unlocked. <see cref="AvaloniaSurface"/> locks the
+/// devices whenever the UI has capture, leaving the queue intact and suppressing game input at once.
 /// </remarks>
 internal sealed class AvaloniaInputPump
 {
@@ -26,12 +25,10 @@ internal sealed class AvaloniaInputPump
 
     /// <summary>Translates this frame's raylib input into Avalonia raw input events.</summary>
     /// <param name="pointerPosition">
-    /// The cursor in Avalonia's client coordinate space. The caller maps it, because a placed surface
-    /// has its own coordinate space that only the placement texture knows about.
+    /// The cursor in Avalonia's client coordinate space. Mapped by the caller, because only the
+    /// placement texture knows an anchored surface's coordinate space.
     /// </param>
-    /// <param name="pointerEnabled">
-    /// Whether pointer events should reach Avalonia at all. False while the game has grabbed the mouse.
-    /// </param>
+    /// <param name="pointerEnabled">Whether pointer events should reach Avalonia at all.</param>
     /// <param name="keyboardEnabled">Whether key and text events should reach Avalonia.</param>
     public void Pump(Point pointerPosition, bool pointerEnabled, bool keyboardEnabled)
     {
@@ -43,8 +40,7 @@ internal sealed class AvaloniaInputPump
         {
             pointerWasInside = false;
 
-            // Forget the cached position too, so re-entering the UI sends a fresh move event even if
-            // the cursor happens to be exactly where it left.
+            // Forgotten too, so re-entering sends a fresh move even from the exact position it left.
             lastPointerPosition = new Point(Double.NaN, Double.NaN);
             impl.OnPointerLeft(timestamp);
         }
@@ -54,8 +50,7 @@ internal sealed class AvaloniaInputPump
 
     private void PumpPointer(Point point, ulong timestamp, RawInputModifiers modifiers)
     {
-        // Compared in client space rather than window space so a surface that moves under a stationary
-        // cursor still reports the move.
+        // Compared in client space, so a surface moving under a stationary cursor still reports a move.
         if (point != lastPointerPosition)
         {
             lastPointerPosition = point;
@@ -92,8 +87,8 @@ internal sealed class AvaloniaInputPump
     {
         foreach (var (raylibKey, key, physicalKey) in KeyMap.Keys)
         {
-            // IsKeyPressedRepeat covers held-down auto-repeat, which text editing and list navigation
-            // both rely on. It never fires for the initial press, so the two are complementary.
+            // IsKeyPressedRepeat covers the auto-repeat text editing and list navigation rely on, and
+            // never fires for the initial press - the two are complementary.
             if (Raylib.IsKeyPressed(raylibKey) || Raylib.IsKeyPressedRepeat(raylibKey))
             {
                 impl.OnKey(RawKeyEventType.KeyDown, key, physicalKey, modifiers, null, timestamp);

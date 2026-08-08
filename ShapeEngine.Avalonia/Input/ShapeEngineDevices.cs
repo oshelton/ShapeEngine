@@ -2,11 +2,10 @@ using Avalonia.Input;
 
 namespace ShapeEngine.Avalonia.Input;
 
-/// <summary>The Avalonia input devices every raylib-hosted top level reports events against.</summary>
-/// <remarks>
-/// raylib exposes a single system keyboard and a single system mouse, so one instance of each is
-/// shared across all top levels.
-/// </remarks>
+/// <summary>
+/// The Avalonia input devices every raylib-hosted top level reports events against. raylib exposes one
+/// system keyboard and one system mouse, so a single instance of each is shared.
+/// </summary>
 internal static class ShapeEngineDevices
 {
     public static readonly KeyboardDevice Keyboard = new();

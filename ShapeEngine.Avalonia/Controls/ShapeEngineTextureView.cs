@@ -17,17 +17,14 @@ namespace ShapeEngine.Avalonia.Controls;
 /// </summary>
 /// <remarks>
 /// The content is rendered into a private raylib render texture during the game's frame, then copied
-/// into a bitmap the control draws. Nothing hands the OpenGL context between raylib and Skia, so this
-/// costs a texture and a read back rather than any risk of the two renderers corrupting each other's
-/// state.
+/// into a bitmap the control draws. Nothing hands the OpenGL context between raylib and Skia, so the
+/// two renderers cannot corrupt each other's state - the price is a texture and a read back that stalls
+/// the pipeline, scaling with the control's area. How often that happens is the whole difference between
+/// <see cref="ShapeEngineStaticTextureView"/> and <see cref="ShapeEngineAnimatedTextureView"/>; for
+/// content large enough that it matters, <see cref="ShapeEngineDirectView"/> avoids it entirely.
 /// <para>
-/// Read back is the expensive part: it stalls the GPU pipeline, and the cost scales with the control's
-/// area. How often it happens is the whole difference between the two concrete views - see
-/// <see cref="ShapeEngineStaticTextureView"/> and <see cref="ShapeEngineAnimatedTextureView"/>.
-/// </para>
-/// <para>
-/// The redraw happens in the engine's UI drawing pass, which is after a surface has already composited,
-/// so the control shows what was drawn last frame. Expect one frame of latency.
+/// The redraw happens after a surface has already composited, so the control shows what was drawn last
+/// frame. Expect one frame of latency.
 /// </para>
 /// </remarks>
 public abstract class ShapeEngineTextureView : Control
@@ -161,7 +158,7 @@ public abstract class ShapeEngineTextureView : Control
 
     /// <summary>Drives <see cref="RenderFrame"/> once per frame from the game loop.</summary>
     /// <remarks>
-    /// <c>PreDrawUi</c> is the engine's drawing hook that runs exactly once per frame and is not already
+    /// <c>PreDrawUi</c> is the one drawing hook that runs exactly once per frame and is not already
     /// inside a render target, so the view's texture is never bound inside another one.
     /// </remarks>
     private sealed class FramePump : Game.CustomEvent

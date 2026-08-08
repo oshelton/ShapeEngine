@@ -4,10 +4,9 @@ namespace ShapeEngine.Avalonia.Controls;
 /// Displays ShapeEngine drawing that animates, redrawing continuously.
 /// </summary>
 /// <remarks>
-/// Every redraw reads the texture back from the GPU, which stalls the pipeline, so the cost is real and
-/// scales with the control's area. Keep the control small, or raise <see cref="RefreshInterval"/> to
-/// redraw less often than every frame. If the content does not actually animate, use
-/// <see cref="ShapeEngineStaticTextureView"/> instead - it costs nothing between redraws.
+/// Every redraw reads the texture back from the GPU, at a cost that scales with the control's area. Keep
+/// the control small, or raise <see cref="RefreshInterval"/>. If the content does not actually animate,
+/// <see cref="ShapeEngineStaticTextureView"/> costs nothing between redraws.
 /// </remarks>
 /// <example>
 /// <code>

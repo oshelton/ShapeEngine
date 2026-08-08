@@ -13,8 +13,8 @@ internal sealed class ShapeEngineCursorFactory : ICursorFactory
         => new ShapeEngineStandardCursorImpl(ToRaylibCursor(cursorType));
 
     /// <remarks>
-    /// raylib has no API for supplying cursor bitmaps, so custom cursors fall back to the arrow rather
-    /// than throwing - a control asking for one should still be usable.
+    /// raylib cannot supply cursor bitmaps, so this falls back to the arrow rather than throwing - a
+    /// control asking for a custom cursor should still be usable.
     /// </remarks>
     public ICursorImpl CreateCursor(Bitmap cursor, PixelPoint hotSpot)
         => new ShapeEngineStandardCursorImpl(MouseCursor.Default);

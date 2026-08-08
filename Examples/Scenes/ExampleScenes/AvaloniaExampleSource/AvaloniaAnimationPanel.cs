@@ -14,8 +14,8 @@ namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 /// Animated Avalonia controls and content, driven entirely by the game loop.
 /// </summary>
 /// <remarks>
-/// Avalonia's animation clock is advanced by the surface's render tick, so everything here is a test of
-/// that plumbing: if the clock stalls or jumps, the motion stutters visibly. Three kinds are covered -
+/// Avalonia's animation clock is advanced by the surface's render tick, so everything here tests that
+/// plumbing - if the clock stalls or jumps, the motion stutters visibly. Three kinds are covered:
 /// keyframe animations on render transforms, property transitions triggered by state changes, and the
 /// built-in animations of <see cref="ProgressBar"/> and <see cref="TransitioningContentControl"/>.
 /// </remarks>
@@ -78,8 +78,8 @@ public sealed class AvaloniaAnimationPanel : ViewBase
 
     /// <summary>Advances the state that the transition-based animations react to.</summary>
     /// <remarks>
-    /// Called by the scene rather than by a timer inside the view, so the transitions are visibly driven
-    /// by the game rather than by Avalonia running independently.
+    /// Called by the scene rather than a timer inside the view, so the transitions are visibly driven by
+    /// the game rather than by Avalonia running independently.
     /// </remarks>
     public void AdvanceTransitions()
     {
@@ -186,9 +186,8 @@ public sealed class AvaloniaAnimationPanel : ViewBase
 
     /// <summary>Runs a looping keyframe animation between the given start and end values.</summary>
     /// <remarks>
-    /// Transform properties are animated against the control, not against its <c>RenderTransform</c>.
-    /// Avalonia's transform animator resolves the transform from the control itself, and handing it the
-    /// transform directly throws.
+    /// Transform properties are animated against the control, not its <c>RenderTransform</c>: Avalonia's
+    /// transform animator resolves the transform itself, and handing it one directly throws.
     /// </remarks>
     private static void Loop(
         Animatable target,

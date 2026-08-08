@@ -17,13 +17,9 @@ internal sealed class RaylibGlRenderingSession : IGlPlatformSurfaceRenderingSess
     public double Scaling => surface.RenderScaling;
 
     /// <summary>
-    /// True so the UI lands the right way up once raylib samples the texture.
+    /// Describes the framebuffer, not the desired output: the target uses OpenGL's bottom-left origin,
+    /// and Avalonia compensates. raylib samples top-down, so leaving this false renders upside down.
     /// </summary>
-    /// <remarks>
-    /// This flag describes the framebuffer, not the desired output: it tells Avalonia the target uses
-    /// OpenGL's bottom-left origin, and Avalonia compensates. raylib samples textures top-down, so
-    /// leaving it false renders the whole surface upside down.
-    /// </remarks>
     public bool IsYFlipped => true;
 
     public RaylibGlRenderingSession(RaylibGlContext context, RaylibGlSurface surface, RlglStateGuard stateGuard)
@@ -35,7 +31,7 @@ internal sealed class RaylibGlRenderingSession : IGlPlatformSurfaceRenderingSess
 
     public void Dispose()
     {
-        // Make sure everything Avalonia queued has actually reached the texture before raylib samples it.
+        // Avalonia's queued work has to reach the texture before raylib samples it.
         Context.GlInterface.Flush();
 
         stateGuard.Dispose();

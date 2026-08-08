@@ -25,9 +25,8 @@ internal sealed class RaylibGlRenderTarget : IGlPlatformSurfaceRenderTarget
 
     public IGlPlatformSurfaceRenderingSession BeginDraw(IRenderTarget.RenderTargetSceneInfo sceneInfo)
     {
-        // Take the context away from raylib for the duration of the session, then bind the surface's
-        // framebuffer. Avalonia reads the current binding to build its Skia render target, so this
-        // has to happen before the session is handed back.
+        // Avalonia reads the current binding to build its Skia render target, so the framebuffer has to
+        // be bound before the session is handed back.
         var gl = context.GlInterface;
         var stateGuard = RlglStateGuard.Enter(gl);
 

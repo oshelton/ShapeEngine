@@ -9,10 +9,9 @@ namespace ShapeEngine.Avalonia.Gpu;
 /// An offscreen OpenGL framebuffer that Avalonia renders into and raylib draws as a plain texture.
 /// </summary>
 /// <remarks>
-/// The framebuffer is built by hand rather than with <c>Raylib.LoadRenderTexture</c> because raylib
-/// attaches a depth-only buffer, and Skia needs a stencil attachment for clipping and anti-aliasing.
-/// The colour attachment is still created through rlgl so raylib owns the texture and can draw it with
-/// the normal texture functions.
+/// Built by hand rather than with <c>Raylib.LoadRenderTexture</c>, which attaches a depth-only buffer
+/// where Skia needs a stencil attachment for clipping and anti-aliasing. The colour attachment still
+/// goes through rlgl, so raylib owns the texture and can draw it with the normal texture functions.
 /// </remarks>
 internal sealed class RaylibGlSurface : IGlPlatformSurface, IDisposable
 {
@@ -54,8 +53,7 @@ internal sealed class RaylibGlSurface : IGlPlatformSurface, IDisposable
             Format = PixelFormat.UncompressedR8G8B8A8
         };
 
-        // Building the framebuffer rebinds GL state raylib is relying on, so it goes through the guard
-        // even though this is setup rather than rendering.
+        // Setup rather than rendering, but it still rebinds GL state raylib is relying on.
         using (RlglStateGuard.Enter(gl))
         {
             FramebufferId = gl.GenFramebuffer();
@@ -97,10 +95,7 @@ internal sealed class RaylibGlSurface : IGlPlatformSurface, IDisposable
         }
     }
 
-    /// <remarks>
-    /// The context parameter is ignored: there is only ever raylib's context, which this surface's
-    /// framebuffer was already created on.
-    /// </remarks>
+    /// <remarks>The parameter is ignored: there is only ever raylib's context.</remarks>
     public IGlPlatformSurfaceRenderTarget CreateGlRenderTarget(IGlContext glContext)
         => new RaylibGlRenderTarget(this, context);
 

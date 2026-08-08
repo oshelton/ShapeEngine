@@ -13,12 +13,9 @@ namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 /// Shared plumbing for the Avalonia example scenes.
 /// </summary>
 /// <remarks>
-/// Handles Avalonia setup, the moving background the surfaces are composited over, and registering and
-/// tearing down surfaces. Subclasses only describe which surfaces they want.
-/// <para>
-/// The bouncing circles are not decoration: they show that raylib keeps rendering correctly after Skia
-/// has had the OpenGL context, and they show through the panels' translucent backgrounds.
-/// </para>
+/// Handles Avalonia setup, surface registration and teardown, and the moving background; subclasses only
+/// describe which surfaces they want. The bouncing circles are not decoration - they show that raylib
+/// keeps rendering correctly after Skia has had the OpenGL context.
 /// </remarks>
 public abstract class AvaloniaExampleSceneBase : ExampleScene
 {

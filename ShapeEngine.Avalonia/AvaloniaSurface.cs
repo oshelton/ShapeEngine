@@ -21,36 +21,19 @@ namespace ShapeEngine.Avalonia;
 /// Hosts Avalonia UI inside a ShapeEngine game, rendered onto the game's OpenGL surface.
 /// </summary>
 /// <remarks>
-/// Register it with <c>Game.AddCustomEvent</c> and dispose it when done. Avalonia must already be
-/// configured - see <see cref="AppBuilderExtensions.UseShapeEngine"/>.
+/// Register it with <c>Game.AddCustomEvent</c> and dispose it when done; Avalonia must already be
+/// configured with <see cref="AppBuilderExtensions.UseShapeEngine"/>.
 /// <para>
-/// The surface owns the <see cref="ScreenTexture"/> it renders through, registering and unloading it
-/// with the game itself. Placement comes from the <see cref="AvaloniaSurfaceAnchor"/> passed to the
-/// constructor, so a surface keeps its position and proportions as the window resizes. Because the UI
-/// goes through a screen texture, the texture's <see cref="ScreenTexture.Shaders"/> apply to it - a
-/// post-processing shader can run over the interface.
-/// </para>
-/// <para>
-/// Screen textures composite before the game's <c>DrawUI</c>, so anything the game draws there covers
-/// the interface. Ordering against other screen textures is controlled by the texture's
-/// <c>DrawToScreenOrder</c>.
+/// The surface owns the <see cref="ScreenTexture"/> it renders through, so the texture's
+/// <see cref="ScreenTexture.Shaders"/> post-process the interface. Screen textures composite before the
+/// game's <c>DrawUI</c>, so anything the game draws there covers it.
 /// </para>
 /// </remarks>
 /// <example>
-/// Full window:
 /// <code>
 /// AppBuilder.Configure&lt;MyApp&gt;().UseShapeEngine().SetupWithoutStarting();
 ///
 /// Game.Instance.AddCustomEvent(new AvaloniaSurface(new MyMenuView()));
-/// </code>
-/// A HUD panel in the lower left that scales its content with the window:
-/// <code>
-/// var surface = new AvaloniaSurface(
-///     new MyHudView(),
-///     new AvaloniaSurfaceAnchor(0.3f, 0.4f, 0.02f, 0.98f),
-///     scaleContent: true);
-///
-/// Game.Instance.AddCustomEvent(surface);
 /// </code>
 /// </example>
 public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
@@ -97,8 +80,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
         var placementAnchor = anchor ?? AvaloniaSurfaceAnchor.FullScreen;
 
-        // Multi shader support so a game can post-process the interface without having to rebuild the
-        // surface for it.
+        // Multi shader support up front, so post-processing the interface never means rebuilding it.
         placement = new ScreenTexture(placementAnchor.Stretch, placementAnchor.Position, ShaderSupportType.Multi);
         placement.Initialize(Game.Instance.Window.CurScreenSize, Raylib.GetMousePosition());
         placement.OnDrawUI += OnPlacementDrawUi;
@@ -116,8 +98,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
         TopLevel = new ShapeEngineTopLevel(impl)
         {
-            // No background of its own: the game has to show through everywhere the content doesn't
-            // draw, and a hit test on the background would also steal the pointer from the game.
+            // No background: it would hide the game and hit test, stealing the pointer from it.
             Background = null,
             TransparencyLevelHint = [WindowTransparencyLevel.Transparent, WindowTransparencyLevel.None]
         };
@@ -152,14 +133,12 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// Whether the content is scaled to fit the surface rather than laid out at the surface's size.
     /// </summary>
     /// <remarks>
-    /// Off, the content lays out against the surface's size: a larger surface gives controls more room
-    /// and text keeps its size. On, the content is measured at its natural size and scaled uniformly to
-    /// fit, so everything grows and shrinks together. The scaling is applied to the visual tree rather
-    /// than to a bitmap, so text stays crisp, and hit testing follows automatically.
+    /// Off, a larger surface gives controls more room and text keeps its size. On, everything grows
+    /// together - scaled through the visual tree, so text stays crisp and hit testing follows.
     /// <para>
-    /// Give the content an intrinsic size - a <c>Width</c> on the root control is usually enough. Scaled
-    /// content is measured unconstrained, so without one, wrapping text never wraps, the natural width
-    /// runs away, and everything is scaled down to fit it.
+    /// Scaled content is measured unconstrained, so give it an intrinsic size - usually a <c>Width</c> on
+    /// the root control. Without one, wrapping text never wraps and the runaway natural width scales
+    /// everything down to nothing.
     /// </para>
     /// </remarks>
     public bool ScaleContent
@@ -175,12 +154,9 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     }
 
     /// <summary>
-    /// The screen texture this surface renders through.
+    /// The screen texture this surface renders through, for attaching shaders or changing the draw order.
+    /// Owned by the surface and unloaded with it.
     /// </summary>
-    /// <remarks>
-    /// Owned by the surface and unloaded with it. Use it to attach shaders, or to change the draw order
-    /// against other screen textures.
-    /// </remarks>
     public ScreenTexture PlacementTexture => placement;
 
     /// <summary>The area of the window the UI is drawn into, in screen coordinates.</summary>
@@ -197,12 +173,9 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// </summary>
     /// <remarks>
     /// Turn this off to route input yourself - <see cref="WantsPointer"/> and
-    /// <see cref="WantsKeyboard"/> stay accurate either way.
-    /// <para>
-    /// Locking takes effect on the next <c>InputSystem</c> update, so the frame in which the cursor
-    /// crosses onto the UI is still visible to the game. That is one frame of overlap on each
-    /// transition, which matters for click-through but not for held input.
-    /// </para>
+    /// <see cref="WantsKeyboard"/> stay accurate either way. Locking takes effect on the next
+    /// <c>InputSystem</c> update, so each transition leaves one frame of overlap: enough to matter for
+    /// click-through, not for held input.
     /// </remarks>
     public bool CaptureGameInput { get; set; } = true;
 
@@ -210,8 +183,8 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Runs after the engine has updated the screen textures, so the placement texture's dimensions and
-    /// scaled mouse position are already current for this frame.
+    /// Runs after the engine has updated the screen textures, so the placement texture's size and scaled
+    /// mouse position are already current.
     /// </remarks>
     protected override void PreHandleInput(GameTime time, Vector2 mousePosGame, Vector2 mousePosGameUi, Vector2 mousePosUi)
     {
@@ -227,9 +200,8 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// Renders the UI and blits it into the placement texture, from inside the texture's draw pass.
     /// </summary>
     /// <remarks>
-    /// The engine draws screen textures before it begins the window's draw pass, so rendering here keeps
-    /// the UI a frame fresh. The Skia pass is safe inside the texture's render target because
-    /// <c>RlglStateGuard</c> restores whichever framebuffer was bound.
+    /// Running the Skia pass inside the texture's render target is safe because <c>RlglStateGuard</c>
+    /// restores whichever framebuffer was bound.
     /// </remarks>
     private void OnPlacementDrawUi(ScreenInfo info, ScreenTexture texture)
     {
@@ -241,8 +213,8 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     /// <summary>Advances Avalonia by one frame and rasterizes it into the surface framebuffer.</summary>
     /// <remarks>
-    /// The order matters: dispatcher work can invalidate layout, and draining the jobs the tick queues
-    /// before painting keeps layout and animation changes in this frame rather than the next.
+    /// The order matters: draining the jobs the tick queues before painting keeps layout and animation
+    /// changes in this frame rather than the next.
     /// </remarks>
     private void RenderAvalonia()
     {
@@ -276,8 +248,8 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     /// <summary>Puts the content into the top level, wrapped for scaling when asked for.</summary>
     /// <remarks>
-    /// The wrapper is reused and detached rather than recreated, because a control cannot be added to a
-    /// new parent while the old one still holds it.
+    /// Detached before reattaching, because a control cannot be added to a new parent while the old one
+    /// still holds it.
     /// </remarks>
     private void ApplyContent()
     {
@@ -299,8 +271,8 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     /// <summary>Matches the surface framebuffer to the placement texture.</summary>
     /// <remarks>
-    /// The texture is sized in physical pixels, so the scaling factor is the window's DPI scale. That
-    /// leaves Avalonia laying out in device independent pixels while rasterizing at full resolution.
+    /// The texture is sized in physical pixels, so the DPI scale is what leaves Avalonia laying out in
+    /// device independent pixels while rasterizing at full resolution.
     /// </remarks>
     private void SyncSize()
     {
@@ -314,9 +286,8 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     /// <summary>The cursor position in Avalonia's client coordinate space.</summary>
     /// <remarks>
-    /// The engine has already mapped the window mouse position into the texture's pixel space for its
-    /// anchor, so all that remains is the conversion to device independent pixels. Positions outside the
-    /// texture simply fail to hit test, which is the behaviour we want.
+    /// The engine has already mapped the mouse into the texture's pixel space for its anchor, so all that
+    /// remains is the conversion to device independent pixels.
     /// </remarks>
     private Point GetPointerPosition()
     {
@@ -353,8 +324,8 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     }
 
     /// <remarks>
-    /// Tracked per surface rather than read back from the device, so several surfaces can each lock and
-    /// release without unlocking on another's behalf.
+    /// Tracked per surface, so several surfaces can each lock and release without unlocking on another's
+    /// behalf.
     /// </remarks>
     private static void SetLock(InputDevice device, bool locked, ref bool isLocked)
     {

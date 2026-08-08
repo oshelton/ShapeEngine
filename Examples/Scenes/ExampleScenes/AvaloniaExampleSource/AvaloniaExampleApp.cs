@@ -5,12 +5,9 @@ using Avalonia.Themes.Fluent;
 namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 
 /// <summary>
-/// The Avalonia <see cref="Application"/> hosted inside the example.
+/// The Avalonia <see cref="Application"/> hosted inside the example. Built in code so the Examples
+/// project needs no XAML compilation; a real game would normally use an <c>App.axaml</c>.
 /// </summary>
-/// <remarks>
-/// Built entirely in code so the Examples project needs no XAML compilation. A real game would
-/// normally use an <c>App.axaml</c> here instead.
-/// </remarks>
 public sealed class AvaloniaExampleApp : Application
 {
     public override void Initialize()

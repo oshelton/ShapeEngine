@@ -9,7 +9,7 @@ namespace ShapeEngine.Avalonia.Input;
 internal static class KeyMap
 {
     /// <summary>
-    /// Every raylib key that maps onto an Avalonia key, paired with its physical (layout independent)
+    /// Every raylib key with an Avalonia equivalent, paired with its physical (layout independent)
     /// counterpart. The input pump polls exactly these each frame.
     /// </summary>
     public static readonly (KeyboardKey Raylib, AvKey Key, PhysicalKey Physical)[] Keys =

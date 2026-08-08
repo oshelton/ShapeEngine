@@ -12,14 +12,12 @@ using SeRect = ShapeEngine.Geometry.RectDef.Rect;
 namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 
 /// <summary>
-/// An Avalonia panel hosting animated ShapeEngine drawing, with Avalonia controls steering it.
+/// An Avalonia panel hosting ShapeEngine drawing, with Avalonia controls steering it.
 /// </summary>
 /// <remarks>
-/// The artwork is drawn with ShapeEngine's own shape functions, so it sits in the control tree like any
-/// other control - it scales with the surface, is clipped by its parent, and has Avalonia content layered
-/// over it. All three view kinds are shown: an animated texture view for the orbits, a static one for the
-/// emblem which only redraws when the button asks it to, and a direct view for the bars, which skips the
-/// texture entirely.
+/// The artwork sits in the control tree like any other control - it scales with the surface, is clipped
+/// by its parent, and has Avalonia content layered over it. All three view kinds are here: an animated
+/// texture view for the orbits, a static one for the emblem, and a direct view for the bars.
 /// </remarks>
 public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
 {
@@ -132,12 +130,9 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
                 });
 
     /// <summary>
-    /// The static counterpart to the animated artwork above.
+    /// The static counterpart to the animated artwork above: drawn once, then left alone. The button
+    /// below it changes the seed and calls <c>InvalidateContent</c>, the only thing that redraws it.
     /// </summary>
-    /// <remarks>
-    /// Drawn once and then left alone, so it costs nothing per frame. The button below it changes the
-    /// seed and calls <c>InvalidateContent</c>, which is the only thing that makes it draw again.
-    /// </remarks>
     private Control BuildEmblem()
         => new Border()
             .Height(90)
@@ -150,12 +145,9 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
                 }.Ref(out emblemView));
 
     /// <summary>
-    /// Draws the artwork with ShapeEngine's shape functions.
+    /// Draws the artwork with ShapeEngine's shape functions. Runs inside the game's frame with the
+    /// render texture bound, so these are ordinary draw calls in texture pixel coordinates.
     /// </summary>
-    /// <remarks>
-    /// Runs inside the game's frame with the render texture bound, so these are ordinary ShapeEngine
-    /// draw calls in texture pixel coordinates.
-    /// </remarks>
     private void DrawArtwork(SeRect bounds)
     {
         var center = bounds.Center;
@@ -195,9 +187,9 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
     /// Drawing straight into Avalonia's framebuffer, with no texture in between.
     /// </summary>
     /// <remarks>
-    /// Deliberately awkward placement: the whole panel is inside a <c>Viewbox</c>, this sits inside a
-    /// clipping border, and the view itself is rotated. If the transform or clip mapping were wrong the
-    /// bars would be the wrong size, in the wrong place, or spilling outside the border.
+    /// Deliberately awkward placement - the panel is inside a <c>Viewbox</c>, this sits inside a clipping
+    /// border, and the view itself is rotated. Any error in the transform or clip mapping shows up as
+    /// bars at the wrong size, in the wrong place, or spilling outside the border.
     /// </remarks>
     private Control BuildDirectArtwork()
         => new Border()
@@ -237,12 +229,9 @@ public sealed class AvaloniaEmbeddedDrawingPanel : ViewBase
     }
 
     /// <summary>
-    /// Draws a fixed arrangement of shapes from the current seed.
+    /// Draws a fixed arrangement of shapes from the current seed. Nothing here reads the animation
+    /// clock, so the result only changes when the seed does - the case the static view exists for.
     /// </summary>
-    /// <remarks>
-    /// Nothing here reads the animation clock, so the result only changes when the seed does - which is
-    /// exactly the case the static view exists for.
-    /// </remarks>
     private void DrawEmblem(SeRect bounds)
     {
         var random = new Random(emblemSeed);

@@ -15,8 +15,7 @@ namespace ShapeEngine.Avalonia;
 /// <c>(1, 1)</c> puts its bottom-right corner in the window's bottom-right corner.
 /// </param>
 /// <remarks>
-/// Expressed in fractions rather than pixels so a surface keeps its place and proportions as the window
-/// resizes, which is what a game UI almost always wants.
+/// Fractions rather than pixels, so a surface keeps its place and proportions as the window resizes.
 /// </remarks>
 public readonly record struct AvaloniaSurfaceAnchor(Vector2 Stretch, Vector2 Position)
 {

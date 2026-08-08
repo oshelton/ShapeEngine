@@ -8,10 +8,8 @@ namespace Examples.Scenes.ExampleScenes;
 /// Switches a surface between laying its content out at the surface's size and scaling it to fit.
 /// </summary>
 /// <remarks>
-/// With scaling off the layout expands into the surface: a wider window gives controls more room and
-/// text keeps its size. With it on the content is measured at its natural size and scaled uniformly,
-/// so everything grows together - the resolution-independent option for a game UI. Resize the window
-/// with each setting to see the difference.
+/// Off, a wider window gives controls more room and text keeps its size. On, everything grows together -
+/// the resolution-independent option for a game UI. Resize the window with each setting to compare.
 /// </remarks>
 public class AvaloniaContentScalingExample : AvaloniaExampleSceneBase
 {

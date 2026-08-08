@@ -4,10 +4,9 @@ namespace ShapeEngine.Avalonia.Gpu;
 
 /// <summary>raylib OpenGL based <see cref="IPlatformGraphics"/> implementation.</summary>
 /// <remarks>
-/// There is exactly one OpenGL context - raylib's - so every Avalonia top level shares it. Avalonia's
-/// own Skia backend takes this context and builds the <c>GRContext</c> and render targets on top of it.
-/// The reference count tracks how many top levels are alive so the context wrapper is released with
-/// the last one.
+/// There is exactly one OpenGL context - raylib's - so every Avalonia top level shares it, and
+/// Avalonia's Skia backend builds its <c>GRContext</c> on top of it. The reference count releases the
+/// wrapper with the last top level.
 /// </remarks>
 internal sealed class RaylibPlatformGraphics : IPlatformGraphics, IDisposable
 {

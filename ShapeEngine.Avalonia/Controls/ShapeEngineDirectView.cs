@@ -17,16 +17,13 @@ namespace ShapeEngine.Avalonia.Controls;
 /// Draws ShapeEngine content straight into Avalonia's framebuffer, with no intermediate texture.
 /// </summary>
 /// <remarks>
-/// Where <see cref="ShapeEngineTextureView"/> renders into its own texture and copies the result back
-/// through system memory, this hands raylib the framebuffer Avalonia is already rendering into. There is
-/// no texture, no read back and no frame of latency, which makes it the better choice for large or
-/// full-surface drawing. It works because Avalonia's Skia backend is running on raylib's own OpenGL
-/// context, so there is nothing to share between them.
+/// Where <see cref="ShapeEngineTextureView"/> copies its result back through system memory, this hands
+/// raylib the framebuffer Avalonia is already rendering into - no texture, no read back, no frame of
+/// latency. It works because Avalonia's Skia backend runs on raylib's own OpenGL context.
 /// <para>
-/// The trade is that raylib draws outside Skia's knowledge. The control's transform and clip are
-/// honoured - they are read from the canvas and applied to rlgl - but Avalonia's opacity and any render
-/// effects are not, because those are Skia compositing steps this drawing bypasses. Content is clipped
-/// to the control's bounds, so nothing escapes, but a fading parent will not fade it.
+/// The trade is that raylib draws outside Skia's knowledge. The control's transform and clip are read
+/// off the canvas and applied to rlgl, but Avalonia's opacity and render effects are Skia compositing
+/// steps this bypasses, so a fading parent will not fade it.
 /// </para>
 /// </remarks>
 /// <example>
@@ -45,8 +42,8 @@ public sealed class ShapeEngineDirectView : Control
     /// so ShapeEngine's drawing functions can be used directly.
     /// </summary>
     /// <remarks>
-    /// Coordinates run from the origin to the control's width and height. Scaling from a parent
-    /// <c>Viewbox</c>, the window's DPI and the control's position on screen are all applied for you.
+    /// Coordinates run from the origin to the control's width and height; a parent <c>Viewbox</c>'s
+    /// scale, the window's DPI and the control's position on screen are all applied for you.
     /// </remarks>
     public Action<SeRect>? DrawContent { get; set; }
 
@@ -74,7 +71,6 @@ public sealed class ShapeEngineDirectView : Control
 
         public Rect Bounds { get; }
 
-        /// <summary>Hit testable across the control, matching how a plain control behaves.</summary>
         public bool HitTest(Point p) => Bounds.Contains(p);
 
         public bool Equals(ICustomDrawOperation? other) => false;
@@ -89,8 +85,7 @@ public sealed class ShapeEngineDirectView : Control
             var clip = canvas.DeviceClipBounds;
             if (clip.Width <= 0 || clip.Height <= 0) return;
 
-            // Everything Skia has queued has to reach the framebuffer before raylib starts issuing its
-            // own calls into the same one.
+            // Skia's queued work has to land before raylib starts issuing calls into the same target.
             canvas.Flush();
 
             var gl = ShapeEnginePlatform.PlatformGraphics.GetSharedContext().GlInterface;
@@ -99,17 +94,16 @@ public sealed class ShapeEngineDirectView : Control
             {
                 PrepareRaylibState(gl);
 
-                // Saved and reassigned rather than pushed and popped. rlgl's matrix stack redirects to
-                // its internal transform when pushed in modelview mode, so a push/pop pair does not
-                // restore the projection - it leaks, and every later raylib frame is drawn skewed.
+                // Saved and reassigned rather than pushed and popped: pushing in modelview mode redirects
+                // rlgl's stack to its internal transform, so a pop leaks the projection into every later
+                // raylib frame.
                 var savedProjection = Rlgl.GetMatrixProjection();
                 var savedModelview = Rlgl.GetMatrixModelview();
 
-                // The render target Avalonia hands over is bottom-origin, so Skia's device coordinates
-                // and OpenGL's already agree - hence the plain bottom-left projection and the scissor
-                // below taking the clip's top edge unflipped. Both matrices are transposed because
-                // raylib's Matrix is column-vector while System.Numerics is row-vector, and Raylib-cs
-                // copies the memory straight across.
+                // Avalonia's target is bottom-origin, so Skia's device coordinates and OpenGL's already
+                // agree - hence the plain bottom-left projection and the unflipped scissor below. Both
+                // matrices are transposed because raylib's Matrix is column-vector where
+                // System.Numerics is row-vector, and Raylib-cs copies the memory straight across.
                 Rlgl.SetMatrixProjection(Matrix4x4.Transpose(
                     Matrix4x4.CreateOrthographicOffCenter(0f, guard.ViewportWidth, 0f, guard.ViewportHeight, -1f, 1f)));
                 Rlgl.SetMatrixModelView(Matrix4x4.Transpose(ToMatrix(canvas.TotalMatrix)));
@@ -133,11 +127,10 @@ public sealed class ShapeEngineDirectView : Control
         /// Puts the OpenGL state into the shape raylib assumes before handing it the framebuffer.
         /// </summary>
         /// <remarks>
-        /// The stencil test is the one that matters: Skia clips with the stencil buffer and leaves the
-        /// test enabled, so raylib's geometry is silently rejected - no error, no output, nothing to
-        /// debug from. Depth and face culling are cleared for the same reason, and the blend mode is
-        /// toggled to force rlgl to reissue <c>glBlendFunc</c>, which it otherwise skips because its
-        /// cached mode still looks correct.
+        /// The stencil test is the one that matters: Skia clips with it and leaves it enabled, so
+        /// raylib's geometry is silently rejected - no error, no output, nothing to debug from. The blend
+        /// mode is toggled to force rlgl to reissue <c>glBlendFunc</c>, which it otherwise skips because
+        /// its cached mode still looks correct.
         /// </remarks>
         private static void PrepareRaylibState(GlInterface gl)
         {
@@ -152,8 +145,8 @@ public sealed class ShapeEngineDirectView : Control
 
         /// <summary>Converts Skia's 2D canvas transform into the 4x4 rlgl expects.</summary>
         /// <remarks>
-        /// This is what places and scales the control: it folds together the control's position, the
-        /// window's DPI scale, any parent <c>Viewbox</c> scale and any render transform.
+        /// This is what places and scales the control - the canvas transform already folds together its
+        /// position, the DPI scale, any <c>Viewbox</c> scale and any render transform.
         /// </remarks>
         private static Matrix4x4 ToMatrix(SkMatrix matrix)
             => new(
@@ -164,8 +157,8 @@ public sealed class ShapeEngineDirectView : Control
 
         /// <summary>Turns Avalonia's clip into a GL scissor box.</summary>
         /// <remarks>
-        /// Avalonia's clip lives in Skia and does not constrain raylib's calls, so without this the
-        /// drawing spills outside the control and over whatever else the surface is showing.
+        /// The clip lives in Skia and does not constrain raylib's calls, so without this the drawing
+        /// spills over whatever else the surface is showing.
         /// </remarks>
         private static void SetClip(SkRect clip)
         {
