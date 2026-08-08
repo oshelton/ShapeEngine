@@ -83,7 +83,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
         // Multi shader support up front, so post-processing the interface never means rebuilding it.
         placement = new ScreenTexture(placementAnchor.Stretch, placementAnchor.Position, ShaderSupportType.Multi);
         placement.Initialize(Game.Instance.Window.CurScreenSize, Raylib.GetMousePosition());
-        placement.OnDrawUI += OnPlacementDrawUi;
+        placement.OnDrawGame += OnPlacementDraw;
 
         Game.Instance.AddScreenTexture(placement);
 
@@ -200,10 +200,12 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// Renders the UI and blits it into the placement texture, from inside the texture's draw pass.
     /// </summary>
     /// <remarks>
-    /// Running the Skia pass inside the texture's render target is safe because <c>RlglStateGuard</c>
-    /// restores whichever framebuffer was bound.
+    /// The game pass rather than the UI one, because the texture applies its shaders between the two -
+    /// drawing in <c>OnDrawUI</c> would put the interface past them. Running the Skia pass inside the
+    /// texture's render target is safe because <c>RlglStateGuard</c> restores whichever framebuffer was
+    /// bound.
     /// </remarks>
-    private void OnPlacementDrawUi(ScreenInfo info, ScreenTexture texture)
+    private void OnPlacementDraw(ScreenInfo info, ScreenTexture texture)
     {
         if (isDisposed) return;
 
@@ -355,7 +357,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
         if (currentCursor != MouseCursor.Default) Raylib.SetMouseCursor(MouseCursor.Default);
 
-        placement.OnDrawUI -= OnPlacementDrawUi;
+        placement.OnDrawGame -= OnPlacementDraw;
         Game.Instance.RemoveScreenTexture(placement);
         placement.Unload();
 
