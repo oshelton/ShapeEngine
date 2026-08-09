@@ -77,6 +77,7 @@ namespace Examples.Scenes
                 examples.Add(new AvaloniaAnimationExample());
                 examples.Add(new AvaloniaEmbeddedDrawingExample());
                 examples.Add(new AvaloniaShaderExample());
+                examples.Add(new AvaloniaMixedContentExample());
                 examples.Add(new AvaloniaMultipleSurfacesExample());
             }
 

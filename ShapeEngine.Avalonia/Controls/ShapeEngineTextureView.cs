@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using Raylib_cs;
 using ShapeEngine.Color;
 using ShapeEngine.Core.GameDef;
@@ -58,15 +59,23 @@ public abstract class ShapeEngineTextureView : Control
     /// </param>
     protected abstract bool ShouldRedraw(float deltaTime, bool contentIsDirty);
 
+    /// <remarks>
+    /// Posted rather than called directly. Attach and detach can happen from deep inside Avalonia's own
+    /// internals - reparenting a control mid-frame, say - which can itself be running from inside the
+    /// engine's own foreach over its <c>CustomEvent</c> set. Registering synchronously there would mutate
+    /// that same set while it is being enumerated. Posting defers the call to <c>PumpDispatcher</c>, which
+    /// runs outside that loop.
+    /// </remarks>
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        Game.Instance.AddCustomEvent(pump);
+        Dispatcher.UIThread.Post(() => Game.Instance.AddCustomEvent(pump));
     }
 
+    /// <remarks>See <see cref="OnAttachedToVisualTree"/> for why this is posted rather than immediate.</remarks>
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        Game.Instance.RemoveCustomEvent(pump);
+        Dispatcher.UIThread.Post(() => Game.Instance.RemoveCustomEvent(pump));
         Release();
 
         base.OnDetachedFromVisualTree(e);
