@@ -73,7 +73,6 @@ namespace Examples.Scenes
             {
                 examples.Add(new AvaloniaFullWindowExample());
                 examples.Add(new AvaloniaAnchoredRegionExample());
-                examples.Add(new AvaloniaContentScalingExample());
                 examples.Add(new AvaloniaAnimationExample());
                 examples.Add(new AvaloniaEmbeddedDrawingExample());
                 examples.Add(new AvaloniaShaderExample());

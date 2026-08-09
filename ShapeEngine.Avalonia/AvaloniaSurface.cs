@@ -47,13 +47,14 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     private readonly ShapeEngineTopLevelImpl impl;
     private readonly AvaloniaInputPump inputPump;
     private readonly ScreenTexture placement;
-    private readonly Viewbox scaleBox = new() { Stretch = Stretch.Uniform };
+
+    /// <summary>Wraps <see cref="content"/> to scale it; only built when <see cref="ScaleContent"/> asks for it.</summary>
+    private readonly Viewbox? scaleBox;
 
     /// <summary>Drives Avalonia's animation clock, independent of the game's own time scaling.</summary>
     private readonly Stopwatch renderClock = Stopwatch.StartNew();
 
     private AvControl? content;
-    private bool scaleContent;
     private MouseCursor currentCursor = MouseCursor.Default;
     private bool hasLockedMouse;
     private bool hasLockedKeyboard;
@@ -112,9 +113,10 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
         inputPump = new AvaloniaInputPump(impl);
 
+        ScaleContent = scaleContent;
+        scaleBox = scaleContent ? new Viewbox { Stretch = Stretch.Uniform } : null;
         this.content = content;
-        this.scaleContent = scaleContent;
-        
+
         if (content is not null)
             ApplyContent();
 
@@ -140,6 +142,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
     /// <summary>
     /// Whether the content is scaled to fit the surface rather than laid out at the surface's size.
+    /// Set once, at construction - a surface wanting the other behavior is cheap enough to just create.
     /// </summary>
     /// <remarks>
     /// Off, a larger surface gives controls more room and text keeps its size. On, everything grows
@@ -150,17 +153,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// everything down to nothing.
     /// </para>
     /// </remarks>
-    public bool ScaleContent
-    {
-        get => scaleContent;
-        set
-        {
-            if (scaleContent == value) return;
-
-            scaleContent = value;
-            ApplyContent();
-        }
-    }
+    public bool ScaleContent { get; }
 
     /// <summary>
     /// The screen texture this surface renders through, for attaching shaders or changing the draw order.
@@ -289,12 +282,12 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// </remarks>
     private void ApplyContent()
     {
-        scaleBox.Child = null;
+        if (scaleBox is not null) scaleBox.Child = null;
         TopLevel.Content = null;
 
         if (content is null) return;
 
-        if (scaleContent)
+        if (scaleBox is not null)
         {
             scaleBox.Child = content;
             TopLevel.Content = scaleBox;
