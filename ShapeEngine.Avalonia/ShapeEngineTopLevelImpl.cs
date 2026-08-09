@@ -19,8 +19,9 @@ namespace ShapeEngine.Avalonia;
 /// An <see cref="ITopLevelImpl"/> that renders into an offscreen OpenGL surface raylib can draw.
 /// </summary>
 /// <remarks>
-/// The surface is recreated - not resized - whenever the render size or DPI scaling changes, because
-/// the framebuffer, its colour texture and its stencil attachment are all fixed size.
+/// The surface is recreated only when the pixel size changes, because the framebuffer, its colour
+/// texture and its stencil attachment are all fixed size. A DPI-scaling-only change updates the
+/// surface in place instead, since none of those need reallocating just because scaling changed.
 /// </remarks>
 internal sealed class ShapeEngineTopLevelImpl : ITopLevelImpl
 {

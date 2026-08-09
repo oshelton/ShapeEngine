@@ -229,6 +229,7 @@ public readonly struct GameSettings
     // /// </remarks>
     // public readonly int MaxSavegameBackups = 3;
 
+    /// <summary>
     /// If Imgui support is enabled or not.
     /// </summary>
     public readonly bool ImguiEnabled;

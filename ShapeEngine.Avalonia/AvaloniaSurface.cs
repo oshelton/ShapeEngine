@@ -31,9 +31,15 @@ namespace ShapeEngine.Avalonia;
 /// </remarks>
 /// <example>
 /// <code>
+/// //App Setup
 /// AppBuilder.Configure&lt;MyApp&gt;().UseShapeEngine().SetupWithoutStarting();
 ///
+/// //Begin display and interaction.
 /// Game.Instance.AddCustomEvent(new AvaloniaSurface(new MyMenuView()));
+///
+/// // Cleanup when done with the surface.
+/// Game.Instance.RemoveCustomEvent(surface);
+/// surface.Dispose();
 /// </code>
 /// </example>
 public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
@@ -108,7 +114,9 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
 
         this.content = content;
         this.scaleContent = scaleContent;
-        ApplyContent();
+        
+        if (content is not null)
+            ApplyContent();
 
         TopLevel.Prepare();
         TopLevel.StartRendering();

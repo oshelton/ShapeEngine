@@ -118,13 +118,15 @@ public sealed class KeyboardDevice : InputDevice
     
     /// <summary>
     /// Returns whether the keyboard device is currently locked.
-    /// Locking can be used to temporarily disable input processing.
+    /// Locking can be used to temporarily disable input processing, except for buttons in
+    /// <see cref="AlwaysAccessibleButtons"/>.
     /// This does not affect whether the device is active or not.
     /// </summary>
     public override bool IsLocked() => isLocked;
 
     /// <summary>
-    /// Locks the keyboard device, preventing input from being registered.
+    /// Locks the keyboard device, preventing input from being registered, except for buttons in
+    /// <see cref="AlwaysAccessibleButtons"/>.
     /// </summary>
     public override void Lock()
     {
@@ -421,6 +423,8 @@ public sealed class KeyboardDevice : InputDevice
     /// <summary>
     /// Gets the value of the specified keyboard button, considering the optional modifier key set.
     /// Returns 1.0f if the button is down and modifiers (if any) are active; otherwise, returns 0.0f.
+    /// Always returns 0.0f while the device is locked, unless <paramref name="button"/> is in
+    /// <see cref="AlwaysAccessibleButtons"/>.
     /// </summary>
     /// <param name="button">The keyboard button to check.</param>
     /// <param name="modifierKeySet">Optional modifier key set that must be active.</param>
@@ -478,6 +482,9 @@ public sealed class KeyboardDevice : InputDevice
     /// considering the optional modifier key set.
     /// Returns 1.0f if the positive button is down, -1.0f if the negative button is down,
     /// or 0.0f if neither or both are down.
+    /// Always returns 0.0f while the device is locked, unless <paramref name="neg"/> or
+    /// <paramref name="pos"/> is in <see cref="AlwaysAccessibleButtons"/> - in which case both
+    /// buttons read live state, not just the exempt one.
     /// </summary>
     /// <param name="neg">The negative direction keyboard button.</param>
     /// <param name="pos">The positive direction keyboard button.</param>
