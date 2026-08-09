@@ -39,6 +39,12 @@ public abstract class AvaloniaExampleSceneBase : ExampleScene
 
         foreach (var surface in CreateSurfaces())
         {
+            // Escape backs out to the main scene everywhere else in the app; without this it would stop
+            // working the moment a surface locks the keyboard to a text box. Registering the app's own
+            // cancel action - rather than duplicating its binding - is enough: ExampleScene's existing
+            // HandleInput() already consumes it every frame, and needs no changes to see it working here.
+            surface.OverrideActions.Add(GameloopExamples.Instance.InputActionUICancel);
+
             surfaces.Add(surface);
             Game.Instance.AddCustomEvent(surface);
         }

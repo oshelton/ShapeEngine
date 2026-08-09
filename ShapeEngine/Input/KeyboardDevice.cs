@@ -40,7 +40,19 @@ public sealed class KeyboardDevice : InputDevice
     private bool wasUsed;
     private bool wasUsedRaw;
     private bool isLocked;
-    
+
+    /// <summary>
+    /// Buttons that keep reporting real state while the device is locked.
+    /// </summary>
+    /// <remarks>
+    /// Locking exists so something with exclusive need of the keyboard - a text box, typically - does
+    /// not also have every keystroke reinterpreted as a game action. Games that want a specific action
+    /// to work regardless (Escape-to-pause is the usual case) can add its bound buttons here rather than
+    /// avoid locking altogether. The exemption is per button, not per action - another action sharing the
+    /// same button becomes reachable too, which matters for a key not otherwise reserved for one purpose.
+    /// </remarks>
+    public readonly HashSet<ShapeKeyboardButton> AlwaysAccessibleButtons = [];
+
     private int pressedCount;
     private float pressedCountDurationTimer;
     private float usedDurationTimer;
@@ -415,7 +427,7 @@ public sealed class KeyboardDevice : InputDevice
     /// <returns>1.0f if the button is down and modifiers are active; otherwise, 0.0f.</returns>
     public float GetValue(ShapeKeyboardButton button, ModifierKeySet? modifierKeySet = null)
     {
-        if (isLocked) return 0f;
+        if (isLocked && !AlwaysAccessibleButtons.Contains(button)) return 0f;
         if (modifierKeySet != null && !modifierKeySet.IsActive()) return 0f;
         return Raylib.IsKeyDown((KeyboardKey)button) ? 1f : 0f;
     }
@@ -473,7 +485,7 @@ public sealed class KeyboardDevice : InputDevice
     /// <returns>The axis value: 1.0f, -1.0f, or 0.0f.</returns>
     public float GetValue(ShapeKeyboardButton neg, ShapeKeyboardButton pos, ModifierKeySet? modifierKeySet = null)
     {
-        if (isLocked) return 0f;
+        if (isLocked && !AlwaysAccessibleButtons.Contains(neg) && !AlwaysAccessibleButtons.Contains(pos)) return 0f;
         if (modifierKeySet != null && !modifierKeySet.IsActive()) return 0f;
         float vNegative = Raylib.IsKeyDown((KeyboardKey)neg) ? 1f : 0f;
         float vPositive = Raylib.IsKeyDown((KeyboardKey)pos) ? 1f : 0f;

@@ -3,6 +3,9 @@ using Avalonia;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Raylib_cs;
+using ShapeEngine.Core.GameDef;
+using ShapeEngine.Input;
+using AvKey = Avalonia.Input.Key;
 using RlMouseButton = Raylib_cs.MouseButton;
 
 namespace ShapeEngine.Avalonia.Input;
@@ -13,6 +16,13 @@ namespace ShapeEngine.Avalonia.Input;
 /// for typed characters: <c>Raylib.GetCharPressed</c> drains a queue that ShapeEngine's
 /// <c>KeyboardDevice</c> also drains, but only while unlocked. <see cref="AvaloniaSurface"/> locks the
 /// devices whenever the UI has capture, leaving the queue intact and suppressing game input at once.
+/// <para>
+/// A gamepad is not a keyboard, but Avalonia already knows how to navigate and activate controls with
+/// one - it just does not read one, so the D-pad and a face button are translated into the same Tab,
+/// Shift+Tab and Space it would otherwise get from a keyboard. Which gamepad is "the" gamepad is read
+/// from <see cref="GamepadDeviceManager.LastUsedGamepad"/>, ShapeEngine's own notion of whichever
+/// controller the player is currently using.
+/// </para>
 /// </remarks>
 internal sealed class AvaloniaInputPump
 {
@@ -29,7 +39,10 @@ internal sealed class AvaloniaInputPump
     /// placement texture knows an anchored surface's coordinate space.
     /// </param>
     /// <param name="pointerEnabled">Whether pointer events should reach Avalonia at all.</param>
-    /// <param name="keyboardEnabled">Whether key and text events should reach Avalonia.</param>
+    /// <param name="keyboardEnabled">
+    /// Whether key and text events should reach Avalonia. Tab and the D-pad reach it regardless, while
+    /// the pointer is over the surface - see the remark on that branch below.
+    /// </param>
     public void Pump(Point pointerPosition, bool pointerEnabled, bool keyboardEnabled)
     {
         var timestamp = (ulong)Environment.TickCount64;
@@ -45,7 +58,21 @@ internal sealed class AvaloniaInputPump
             impl.OnPointerLeft(timestamp);
         }
 
-        if (keyboardEnabled) PumpKeyboard(timestamp, modifiers);
+        if (keyboardEnabled)
+        {
+            PumpKeyboard(timestamp, modifiers);
+            PumpGamepadNavigation(timestamp, modifiers, includeActivation: true);
+        }
+
+        // Tab still reaches Avalonia while the broader keyboard gate is shut, as long as the pointer is
+        // over the surface - otherwise nothing is ever focused yet to open that gate, and Tab could
+        // never be the thing that focuses the first control. The D-pad is this surface's equivalent:
+        // there is nothing to activate yet, so only navigation is forwarded here.
+        else if (pointerEnabled)
+        {
+            PumpKey(KeyMap.Tab, timestamp, modifiers);
+            PumpGamepadNavigation(timestamp, modifiers, includeActivation: false);
+        }
     }
 
     private void PumpPointer(Point point, ulong timestamp, RawInputModifiers modifiers)
@@ -85,20 +112,7 @@ internal sealed class AvaloniaInputPump
 
     private void PumpKeyboard(ulong timestamp, RawInputModifiers modifiers)
     {
-        foreach (var (raylibKey, key, physicalKey) in KeyMap.Keys)
-        {
-            // IsKeyPressedRepeat covers the auto-repeat text editing and list navigation rely on, and
-            // never fires for the initial press - the two are complementary.
-            if (Raylib.IsKeyPressed(raylibKey) || Raylib.IsKeyPressedRepeat(raylibKey))
-            {
-                impl.OnKey(RawKeyEventType.KeyDown, key, physicalKey, modifiers, null, timestamp);
-            }
-
-            if (Raylib.IsKeyReleased(raylibKey))
-            {
-                impl.OnKey(RawKeyEventType.KeyUp, key, physicalKey, modifiers, null, timestamp);
-            }
-        }
+        foreach (var entry in KeyMap.Keys) PumpKey(entry, timestamp, modifiers);
 
         var unicode = Raylib.GetCharPressed();
         while (unicode > 0)
@@ -108,4 +122,61 @@ internal sealed class AvaloniaInputPump
         }
     }
 
+    private void PumpKey((KeyboardKey Raylib, AvKey Key, PhysicalKey Physical) entry, ulong timestamp, RawInputModifiers modifiers)
+    {
+        var (raylibKey, key, physicalKey) = entry;
+
+        // IsKeyPressedRepeat covers the auto-repeat text editing and list navigation rely on, and
+        // never fires for the initial press - the two are complementary.
+        if (Raylib.IsKeyPressed(raylibKey) || Raylib.IsKeyPressedRepeat(raylibKey))
+        {
+            impl.OnKey(RawKeyEventType.KeyDown, key, physicalKey, modifiers, null, timestamp);
+        }
+
+        if (Raylib.IsKeyReleased(raylibKey))
+        {
+            impl.OnKey(RawKeyEventType.KeyUp, key, physicalKey, modifiers, null, timestamp);
+        }
+    }
+
+    /// <summary>Translates the D-pad, and optionally a face button, into the keys Avalonia already handles.</summary>
+    /// <param name="includeActivation">
+    /// Whether the face button that "clicks" the focused control should be forwarded too - left out
+    /// while nothing is focused yet, since there would be nothing for it to activate.
+    /// </param>
+    /// <remarks>
+    /// No auto-repeat on holding the D-pad, unlike keyboard navigation - raylib has no gamepad
+    /// equivalent of <c>IsKeyPressedRepeat</c> to drive one from, so for now each direction moves focus
+    /// once per press.
+    /// </remarks>
+    private void PumpGamepadNavigation(ulong timestamp, RawInputModifiers modifiers, bool includeActivation)
+    {
+        var gamepadIndex = Game.Instance.Input.GamepadManager.LastUsedGamepad?.Index;
+        if (gamepadIndex is not { } index || !Raylib.IsGamepadAvailable(index)) return;
+
+        // Right and down both move forward, left and up both move back - simple rather than a true
+        // spatial mapping, but it matches every layout this integration's panels actually use.
+        PumpGamepadKey(index, GamepadButton.LeftFaceRight, AvKey.Tab, PhysicalKey.Tab, modifiers, timestamp);
+        PumpGamepadKey(index, GamepadButton.LeftFaceDown, AvKey.Tab, PhysicalKey.Tab, modifiers, timestamp);
+        PumpGamepadKey(index, GamepadButton.LeftFaceLeft, AvKey.Tab, PhysicalKey.Tab, modifiers | RawInputModifiers.Shift, timestamp);
+        PumpGamepadKey(index, GamepadButton.LeftFaceUp, AvKey.Tab, PhysicalKey.Tab, modifiers | RawInputModifiers.Shift, timestamp);
+
+        if (includeActivation)
+        {
+            PumpGamepadKey(index, GamepadButton.RightFaceDown, AvKey.Space, PhysicalKey.Space, modifiers, timestamp);
+        }
+    }
+
+    private void PumpGamepadKey(int gamepadIndex, GamepadButton button, AvKey key, PhysicalKey physicalKey, RawInputModifiers modifiers, ulong timestamp)
+    {
+        if (Raylib.IsGamepadButtonPressed(gamepadIndex, button))
+        {
+            impl.OnKey(RawKeyEventType.KeyDown, key, physicalKey, modifiers, null, timestamp);
+        }
+
+        if (Raylib.IsGamepadButtonReleased(gamepadIndex, button))
+        {
+            impl.OnKey(RawKeyEventType.KeyUp, key, physicalKey, modifiers, null, timestamp);
+        }
+    }
 }

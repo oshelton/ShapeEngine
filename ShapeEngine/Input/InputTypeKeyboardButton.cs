@@ -13,6 +13,11 @@ public sealed class InputTypeKeyboardButton : IInputType
     private readonly ModifierKeySet? modifierKeySet;
 
     /// <summary>
+    /// The keyboard button this input type represents.
+    /// </summary>
+    public ShapeKeyboardButton Button => button;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="InputTypeKeyboardButton"/> class.
     /// </summary>
     /// <param name="button">The keyboard button to represent.</param>

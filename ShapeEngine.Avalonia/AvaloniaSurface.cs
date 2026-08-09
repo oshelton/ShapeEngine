@@ -51,6 +51,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     private MouseCursor currentCursor = MouseCursor.Default;
     private bool hasLockedMouse;
     private bool hasLockedKeyboard;
+    private bool wantsExclusiveKeyboard;
     private bool isDisposed;
 
     /// <summary>Creates a surface and the screen texture it renders through.</summary>
@@ -165,7 +166,10 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// <summary>Whether the cursor is currently over a hit-testable Avalonia control.</summary>
     public bool WantsPointer { get; private set; }
 
-    /// <summary>Whether an Avalonia control is currently accepting typed characters.</summary>
+    /// <summary>
+    /// Whether the UI currently needs the keyboard - a control is actively accepting text, or the
+    /// pointer is over the surface and something inside it is focused.
+    /// </summary>
     public bool WantsKeyboard { get; private set; }
 
     /// <summary>
@@ -176,8 +180,29 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// <see cref="WantsKeyboard"/> stay accurate either way. Locking takes effect on the next
     /// <c>InputSystem</c> update, so each transition leaves one frame of overlap: enough to matter for
     /// click-through, not for held input.
+    /// <para>
+    /// The keyboard is only ever locked for active text editing, not merely because something in the UI
+    /// is focused - a focused button does not stop the game seeing its own keys. See
+    /// <see cref="OverrideActions"/> for the one case that still needs an escape hatch: actions that must
+    /// reach the game even mid-edit.
+    /// </para>
     /// </remarks>
     public bool CaptureGameInput { get; set; } = true;
+
+    /// <summary>
+    /// Actions that reach the game even while a control has exclusive keyboard capture -
+    /// <c>InputActionUICancel</c>-style "back out" bindings being the usual case. Empty by default.
+    /// </summary>
+    /// <remarks>
+    /// Reuse the game's own action rather than rebuilding its bindings: its normal <c>Consume</c>/
+    /// <c>Update</c>, wherever the game already calls it, sees real state and fires exactly as it would
+    /// with no surface in the way. Only its keyboard-bound <see cref="IInputType"/>s are affected -
+    /// gamepad bindings are unaffected either way, since a surface never locks the gamepad; mouse
+    /// bindings are not currently supported. Read <see cref="KeyboardDevice.AlwaysAccessibleButtons"/>'s
+    /// remarks for the one thing to know: the exemption is per button, so another action bound to the
+    /// same key becomes reachable too.
+    /// </remarks>
+    public HashSet<InputAction> OverrideActions { get; } = [];
 
     #region Game loop hooks
 
@@ -194,6 +219,7 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
         UpdateCapture();
         inputPump.Pump(GetPointerPosition(), WantsPointer || hasLockedMouse, WantsKeyboard || hasLockedKeyboard);
         ApplyInputLocks();
+        SyncOverrideActions();
     }
 
     /// <summary>
@@ -306,16 +332,55 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
         var hit = TopLevel.InputHitTest(GetPointerPosition());
         WantsPointer = hit is not null && !ReferenceEquals(hit, TopLevel);
 
-        // Focus alone is a bad signal - a focused button would swallow WASD forever. Text input being
-        // active means a control genuinely needs the keys.
-        WantsKeyboard = impl.TextInputMethod.IsActive;
+        // Text input being active always wants the keys, even with the pointer elsewhere - a control
+        // mid-edit doesn't stop wanting keystrokes just because the mouse moved off it.
+        wantsExclusiveKeyboard = impl.TextInputMethod.IsActive;
+
+        // Focus alone is still a bad signal for locking the game out - see ApplyInputLocks. It is a
+        // fine signal for routing, though: while the pointer is over the UI, whatever it focused - Tab
+        // included - needs the keys forwarded to move on to the next control.
+        var focused = TopLevel.FocusManager?.GetFocusedElement();
+        var hasFocus = focused is not null && !ReferenceEquals(focused, TopLevel);
+        WantsKeyboard = wantsExclusiveKeyboard || (WantsPointer && hasFocus);
     }
 
+    /// <remarks>
+    /// The keyboard locks for exclusive text editing only, not for <see cref="WantsKeyboard"/> at large -
+    /// a focused button still routes Tab and Enter to Avalonia (see <see cref="UpdateCapture"/>), but it
+    /// should not stop the game seeing its own keys just because the pointer happens to be over it.
+    /// </remarks>
     private void ApplyInputLocks()
     {
         var input = Game.Instance.Input;
         SetLock(input.Mouse, CaptureGameInput && WantsPointer, ref hasLockedMouse);
-        SetLock(input.Keyboard, CaptureGameInput && WantsKeyboard, ref hasLockedKeyboard);
+        SetLock(input.Keyboard, CaptureGameInput && wantsExclusiveKeyboard, ref hasLockedKeyboard);
+    }
+
+    /// <summary>
+    /// Keeps <see cref="OverrideActions"/>' keyboard-bound buttons exempt from the lock, so their normal
+    /// <c>Consume</c>/<c>Update</c> - wherever the game already calls it - sees real state.
+    /// </summary>
+    /// <remarks>
+    /// Resynced every frame rather than on change, since a plain <c>HashSet</c> gives no change
+    /// notification and a game is free to remap an action's bindings at any time - cheap enough for the
+    /// handful of entries this is meant for. Buttons are only ever added, never removed on our own
+    /// initiative: several surfaces might contribute the same action, and there is no reliable way from
+    /// here to know whether another still wants it. A game that wants a button reachable again is free to
+    /// remove it from <see cref="KeyboardDevice.AlwaysAccessibleButtons"/> itself.
+    /// </remarks>
+    private void SyncOverrideActions()
+    {
+        if (OverrideActions.Count == 0) return;
+
+        var alwaysAccessible = Game.Instance.Input.Keyboard.AlwaysAccessibleButtons;
+
+        foreach (var action in OverrideActions)
+        {
+            foreach (var input in action.GetInputs())
+            {
+                if (input is InputTypeKeyboardButton keyboardButton) alwaysAccessible.Add(keyboardButton.Button);
+            }
+        }
     }
 
     private void ReleaseInputLocks()

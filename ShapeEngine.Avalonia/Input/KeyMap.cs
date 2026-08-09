@@ -121,6 +121,13 @@ internal static class KeyMap
         (KeyboardKey.KpEqual, AvKey.OemPlus, PhysicalKey.NumPadEqual)
     ];
 
+    /// <summary>
+    /// Tab's own mapping, singled out so <see cref="AvaloniaInputPump"/> can forward it on its own -
+    /// the one key that has to reach Avalonia before anything is focused, to establish focus at all.
+    /// </summary>
+    public static readonly (KeyboardKey Raylib, AvKey Key, PhysicalKey Physical) Tab =
+        (KeyboardKey.Tab, AvKey.Tab, PhysicalKey.Tab);
+
     /// <summary>Reads the currently held modifier keys and mouse buttons.</summary>
     public static RawInputModifiers GetModifiers()
     {
