@@ -13,7 +13,7 @@ namespace Examples.Scenes.ExampleScenes;
 /// </remarks>
 public class AvaloniaAnchoredRegionExample : AvaloniaExampleSceneBase
 {
-    private static readonly AvaloniaSurfaceAnchor Anchor = new(0.34f, 0.66f, 0.04f, 0.62f);
+    private static readonly AvaloniaSurfaceAnchor Anchor = AvaloniaExampleLayout.LeftColumn(0.34f);
 
     private AvaloniaSurface? surface;
     private AvaloniaDemoPanel? panel;

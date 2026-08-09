@@ -1,4 +1,4 @@
-using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Layout;
 using Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 using ShapeEngine.Avalonia;
@@ -10,6 +10,11 @@ namespace Examples.Scenes.ExampleScenes;
 /// A surface covering the whole window, with the panel positioned by Avalonia layout alone. The default
 /// arrangement when no anchor is given.
 /// </summary>
+/// <remarks>
+/// The surface covers the app's own interface as well as the game, so the panel is placed with a grid
+/// whose star rows match the bands in <see cref="AvaloniaExampleLayout"/>. Star sizing is the point: a
+/// fixed pixel margin that clears the title bar in a window clears far too little of it full screen.
+/// </remarks>
 public class AvaloniaFullWindowExample : AvaloniaExampleSceneBase
 {
     private AvaloniaSurface? surface;
@@ -25,15 +30,13 @@ public class AvaloniaFullWindowExample : AvaloniaExampleSceneBase
     {
         panel = new AvaloniaDemoPanel(
             "Full window surface",
-            "The surface fills the window. Margin and alignment place the panel, exactly as they would in a desktop Avalonia app.")
+            "The surface fills the window. A grid of star-sized rows and columns keeps the panel clear of the title above and the device readout below, at any resolution.")
         {
-            Width = 380,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(24, 90, 0, 0)
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Top
         };
 
-        surface = new AvaloniaSurface(panel);
+        surface = new AvaloniaSurface(AvaloniaExampleLayout.SafeArea(panel, 0.34f));
         return [surface];
     }
 

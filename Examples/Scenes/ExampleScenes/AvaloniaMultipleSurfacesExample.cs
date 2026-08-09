@@ -42,18 +42,39 @@ public class AvaloniaMultipleSurfacesExample : AvaloniaExampleSceneBase
         {
             Width = 260,
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 90, 0, 0)
+            VerticalAlignment = VerticalAlignment.Top
         };
 
-        var overlay = new AvaloniaSurface(overlayPanel, order: 1);
+        // Centred in the safe band's top half, which keeps it under the title and clear of the anchored
+        // panels either side.
+        var overlay = new AvaloniaSurface(
+            overlayPanel,
+            AvaloniaExampleLayout.Region(0.34f, AvaloniaExampleLayout.PaddedTop, 0.32f, 0.34f),
+            order: 1);
+
         panels.Add((overlay, overlayPanel));
+
+        const float panelHeight = 0.3f;
 
         return
         [
-            CreatePanel("Top left", Color.FromRgb(120, 200, 255), new AvaloniaSurfaceAnchor(0.26f, 0.3f, 0.03f, 0.16f), scaleContent: false),
-            CreatePanel("Bottom left, scaled", Color.FromRgb(160, 255, 160), new AvaloniaSurfaceAnchor(0.26f, 0.3f, 0.03f, 0.84f), scaleContent: true),
-            CreatePanel("Right", Color.FromRgb(255, 190, 120), new AvaloniaSurfaceAnchor(0.24f, 0.34f, 0.97f, 0.5f), scaleContent: false),
+            CreatePanel(
+                "Top left",
+                Color.FromRgb(120, 200, 255),
+                AvaloniaExampleLayout.Region(AvaloniaExampleLayout.Inset, AvaloniaExampleLayout.PaddedTop, 0.26f, panelHeight),
+                scaleContent: false),
+            CreatePanel(
+                "Bottom left, scaled",
+                Color.FromRgb(160, 255, 160),
+                AvaloniaExampleLayout.Region(AvaloniaExampleLayout.Inset, AvaloniaExampleLayout.PaddedBottom - panelHeight, 0.26f, panelHeight),
+                scaleContent: true),
+            // Below the palette box rather than beside it, since that occupies the right edge from 0.25
+            // to 0.35 and composites after every surface.
+            CreatePanel(
+                "Right",
+                Color.FromRgb(255, 190, 120),
+                AvaloniaExampleLayout.Region(0.71f, 0.45f, 0.26f, panelHeight),
+                scaleContent: false),
             overlay
         ];
     }

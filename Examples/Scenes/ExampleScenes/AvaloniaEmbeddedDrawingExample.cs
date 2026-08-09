@@ -15,7 +15,7 @@ namespace Examples.Scenes.ExampleScenes;
 /// </remarks>
 public class AvaloniaEmbeddedDrawingExample : AvaloniaExampleSceneBase
 {
-    private static readonly AvaloniaSurfaceAnchor Anchor = new(0.36f, 0.78f, 0.04f, 0.56f);
+    private static readonly AvaloniaSurfaceAnchor Anchor = AvaloniaExampleLayout.LeftColumn(0.36f);
 
     private AvaloniaSurface? surface;
     private AvaloniaEmbeddedDrawingPanel? panel;

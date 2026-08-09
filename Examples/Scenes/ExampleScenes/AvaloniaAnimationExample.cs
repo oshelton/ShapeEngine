@@ -16,7 +16,7 @@ public class AvaloniaAnimationExample : AvaloniaExampleSceneBase
 {
     private const float TransitionInterval = 1.6f;
 
-    private static readonly AvaloniaSurfaceAnchor Anchor = new(0.36f, 0.82f, 0.04f, 0.55f);
+    private static readonly AvaloniaSurfaceAnchor Anchor = AvaloniaExampleLayout.LeftColumn(0.36f);
 
     private AvaloniaSurface? surface;
     private AvaloniaAnimationPanel? panel;
@@ -32,7 +32,7 @@ public class AvaloniaAnimationExample : AvaloniaExampleSceneBase
     {
         panel = new AvaloniaAnimationPanel();
 
-        surface = new AvaloniaSurface(panel, Anchor);
+        surface = new AvaloniaSurface(panel, Anchor, true);
         transitionTimer = 0f;
 
         return [surface];

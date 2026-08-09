@@ -20,7 +20,7 @@ namespace Examples.Scenes.ExampleScenes;
 /// </remarks>
 public class AvaloniaShaderExample : AvaloniaExampleSceneBase
 {
-    private static readonly AvaloniaSurfaceAnchor Anchor = new(0.36f, 0.86f, 0.04f, 0.55f);
+    private static readonly AvaloniaSurfaceAnchor Anchor = AvaloniaExampleLayout.LeftColumn(0.36f);
 
     private AvaloniaSurface? surface;
     private AvaloniaShaderPanel? panel;
