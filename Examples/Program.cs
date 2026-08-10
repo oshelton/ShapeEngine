@@ -26,7 +26,7 @@ public static class Program
             MouseEnabled = true,
             MouseVisible = false,
             Msaa4x = true,
-            HighDPI = false,
+            HighDPI = true,
             FramebufferTransparent = false
         };
 

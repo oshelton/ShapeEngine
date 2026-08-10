@@ -6,82 +6,119 @@ using ShapeEngine.Screen;
 namespace Examples.Scenes.ExampleScenes;
 
 /// <summary>
-/// A fragment shader post-processing an Avalonia surface.
+/// Three fragment shaders, each post-processing its own Avalonia surface.
 /// </summary>
 /// <remarks>
 /// Every <see cref="AvaloniaSurface"/> renders through a <see cref="ScreenTexture"/> that supports
 /// shaders, so applying one is just adding a <see cref="ShapeShader"/> to
-/// <see cref="AvaloniaSurface.PlacementTexture"/>. The shader runs over finished Avalonia output - text,
-/// borders, control chrome and all - rather than anything Avalonia has to cooperate with.
+/// <see cref="AvaloniaSurface.PlacementTexture"/>. Each shader runs over finished Avalonia output - text,
+/// borders, control chrome and all - rather than anything Avalonia has to cooperate with, and each
+/// surface's shader, toggle and strength slider are entirely independent of its neighbours'.
 /// <para>
-/// Only this surface is affected; the game behind it renders untouched, which is the difference between
-/// this and a shader on the game's own screen texture.
+/// Only these three surfaces are affected; the game behind them renders untouched, which is the
+/// difference between this and a shader on the game's own screen texture.
 /// </para>
 /// </remarks>
 public class AvaloniaShaderExample : AvaloniaExampleSceneBase
 {
-    private static readonly AvaloniaSurfaceAnchor Anchor = AvaloniaExampleLayout.LeftColumn(0.36f);
+    private static readonly (
+        string Title,
+        string Description,
+        AvaloniaSurfaceAnchor Anchor,
+        Func<ShapeShader?> Load,
+        Action<ShapeShader, float, float, int, int> Update)[] Shaders =
+    [
+        (
+            "Hologram",
+            "A travelling wobble, chromatic split and scanlines.",
+            AvaloniaExampleLayout.Region(AvaloniaExampleLayout.Inset, AvaloniaExampleLayout.PaddedTop, 0.30f, AvaloniaExampleLayout.PaddedHeight),
+            AvaloniaHologramShader.Load,
+            AvaloniaHologramShader.Update
+        ),
+        (
+            "CRT",
+            "Barrel distortion, a vignette and phosphor scanlines - the corners fall outside the curved glass.",
+            AvaloniaExampleLayout.Region(0.35f, AvaloniaExampleLayout.PaddedTop, 0.30f, AvaloniaExampleLayout.PaddedHeight),
+            AvaloniaCrtShader.Load,
+            AvaloniaCrtShader.Update
+        ),
+        (
+            "Pixelate",
+            "Snaps the surface onto a blocky grid - a static effect, so strength is the only thing that moves.",
+            AvaloniaExampleLayout.Region(0.67f, AvaloniaExampleLayout.PaddedTop, 0.30f, AvaloniaExampleLayout.PaddedHeight),
+            AvaloniaPixelateShader.Load,
+            AvaloniaPixelateShader.Update
+        )
+    ];
 
-    private AvaloniaSurface? surface;
-    private AvaloniaShaderPanel? panel;
-    private ShapeShader? shader;
+    private readonly List<(AvaloniaSurface Surface, AvaloniaShaderPanel Panel, ShapeShader? Shader, Action<ShapeShader, float, float, int, int> Update)> views = [];
+
     private float elapsed;
 
     public AvaloniaShaderExample()
     {
         Title = "Avalonia - Shader";
-        Description = "A fragment shader post-processing the Avalonia surface, driven by its own controls";
+        Description = "Three fragment shaders, each post-processing its own Avalonia surface";
     }
 
     protected override IReadOnlyList<AvaloniaSurface> CreateSurfaces()
     {
-        panel = new AvaloniaShaderPanel();
-        surface = new AvaloniaSurface(panel, Anchor, true);
-
+        views.Clear();
         elapsed = 0f;
-        shader = AvaloniaHologramShader.Load();
 
-        // The surface always creates its texture with shader support, so there is nothing to configure.
-        if (shader is not null) surface.PlacementTexture.Shaders?.Add(shader);
+        var surfaces = new List<AvaloniaSurface>(Shaders.Length);
 
-        return [surface];
+        foreach (var (title, description, anchor, load, update) in Shaders)
+        {
+            var panel = new AvaloniaShaderPanel(title, description);
+            var surface = new AvaloniaSurface(panel, anchor, true);
+            var shader = load();
+
+            // The surface always creates its texture with shader support, so there is nothing to configure.
+            if (shader is not null) surface.PlacementTexture.Shaders?.Add(shader);
+
+            views.Add((surface, panel, shader, update));
+            surfaces.Add(surface);
+        }
+
+        return surfaces;
     }
 
     protected override void OnDeactivate()
     {
-        // The surface owns its texture, but the shader is this scene's resource to unload.
-        shader?.Unload();
-        shader = null;
+        // Each surface owns its texture, but the shader is this scene's resource to unload.
+        foreach (var (_, _, shader, _) in views) shader?.Unload();
+        views.Clear();
 
         base.OnDeactivate();
     }
 
     protected override void OnSurfacesUpdated(GameTime time)
     {
-        if (surface is null || panel is null) return;
-
         elapsed += time.Delta;
 
-        if (shader is not null)
+        foreach (var (surface, panel, shader, update) in views)
         {
-            shader.Enabled = panel.ShaderEnabled;
-            AvaloniaHologramShader.Update(
-                shader, elapsed, panel.Strength, surface.PlacementTexture.Width, surface.PlacementTexture.Height);
+            if (shader is not null)
+            {
+                shader.Enabled = panel.ShaderEnabled;
+                update(shader, elapsed, panel.Strength, surface.PlacementTexture.Width, surface.PlacementTexture.Height);
+            }
+
+            var rect = surface.DestinationRect;
+            var state = shader switch
+            {
+                null => "shader failed to compile",
+                { Enabled: false } => "shader off",
+                _ => $"shader on at {panel.Strength:0.00}"
+            };
+
+            panel.SetStatus(
+                $"""
+                 {state}
+                 Surface {rect.Width:0}x{rect.Height:0}
+                 WantsPointer: {surface.WantsPointer}   WantsKeyboard: {surface.WantsKeyboard}
+                 """);
         }
-
-        var rect = surface.DestinationRect;
-        var state = shader switch
-        {
-            null => "shader failed to compile",
-            { Enabled: false } => "shader off",
-            _ => $"shader on at {panel.Strength:0.00}"
-        };
-
-        panel.SetStatus(
-            $"""
-             {state}
-             Surface {rect.Width:0}x{rect.Height:0}
-             WantsPointer: {surface.WantsPointer}   WantsKeyboard: {surface.WantsKeyboard}
-             """);
     }
 }

@@ -57,6 +57,9 @@ public static class AvaloniaExampleLayout
     /// <summary>A column filling the safe band down the left of the window.</summary>
     public static AvaloniaSurfaceAnchor LeftColumn(float width) => Region(Inset, PaddedTop, width, PaddedHeight);
 
+    /// <summary>A column filling the safe band, centered horizontally in the window.</summary>
+    public static AvaloniaSurfaceAnchor CenteredColumn(float width) => Region((1f - width) / 2f, PaddedTop, width, PaddedHeight);
+
     /// <summary>
     /// Wraps content in a grid that confines it to the safe band, for a surface covering the window.
     /// </summary>
@@ -67,7 +70,9 @@ public static class AvaloniaExampleLayout
     /// </remarks>
     public static Control SafeArea(Control content, float width = 1f)
     {
-        var contentWidth = Math.Min(width, 1f - Inset);
+        // Capped at 1 - 2 * Inset, not 1 - Inset, so the default width leaves a matching margin on the
+        // right rather than a right column of exactly zero.
+        var contentWidth = Math.Min(width, 1f - 2f * Inset);
         var remainder = 1f - Inset - contentWidth;
 
         var grid = new Grid
