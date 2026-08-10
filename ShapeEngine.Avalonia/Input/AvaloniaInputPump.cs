@@ -156,10 +156,10 @@ internal sealed class AvaloniaInputPump
 
         // Right and down both move forward, left and up both move back - simple rather than a true
         // spatial mapping, but it matches every layout this integration's panels actually use.
-        PumpGamepadKey(index, GamepadButton.LeftFaceRight, AvKey.Tab, PhysicalKey.Tab, modifiers, timestamp);
-        PumpGamepadKey(index, GamepadButton.LeftFaceDown, AvKey.Tab, PhysicalKey.Tab, modifiers, timestamp);
-        PumpGamepadKey(index, GamepadButton.LeftFaceLeft, AvKey.Tab, PhysicalKey.Tab, modifiers | RawInputModifiers.Shift, timestamp);
-        PumpGamepadKey(index, GamepadButton.LeftFaceUp, AvKey.Tab, PhysicalKey.Tab, modifiers | RawInputModifiers.Shift, timestamp);
+        PumpGamepadKey(index, GamepadButton.LeftFaceRight, KeyMap.Tab.Key, KeyMap.Tab.Physical, modifiers, timestamp);
+        PumpGamepadKey(index, GamepadButton.LeftFaceDown, KeyMap.Tab.Key, KeyMap.Tab.Physical, modifiers, timestamp);
+        PumpGamepadKey(index, GamepadButton.LeftFaceLeft, KeyMap.Tab.Key, KeyMap.Tab.Physical, modifiers | RawInputModifiers.Shift, timestamp);
+        PumpGamepadKey(index, GamepadButton.LeftFaceUp, KeyMap.Tab.Key, KeyMap.Tab.Physical, modifiers | RawInputModifiers.Shift, timestamp);
 
         if (includeActivation)
         {

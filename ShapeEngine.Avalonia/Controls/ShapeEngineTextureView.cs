@@ -135,18 +135,18 @@ public abstract class ShapeEngineTextureView : Control
 
         var image = Raylib.LoadImageFromTexture(renderTexture.Texture);
 
-        // Render textures come back bottom-up because that is how OpenGL stores them.
-        Raylib.ImageFlipVertical(ref image);
-
         using (var locked = bitmap.Lock())
         {
             var rowBytes = textureSize.Width * 4;
             var source = (byte*)image.Data;
             var destination = (byte*)locked.Address;
 
+            // Render textures come back bottom-up because that is how OpenGL stores them, so this reads
+            // source rows back to front rather than flipping the buffer first - one pass instead of two.
             for (var y = 0; y < textureSize.Height; y++)
             {
-                Buffer.MemoryCopy(source + y * rowBytes, destination + y * locked.RowBytes, rowBytes, rowBytes);
+                var sourceRow = textureSize.Height - 1 - y;
+                Buffer.MemoryCopy(source + sourceRow * rowBytes, destination + y * locked.RowBytes, rowBytes, rowBytes);
             }
         }
 

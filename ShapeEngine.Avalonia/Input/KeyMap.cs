@@ -9,6 +9,14 @@ namespace ShapeEngine.Avalonia.Input;
 internal static class KeyMap
 {
     /// <summary>
+    /// Tab's own mapping, singled out so <see cref="AvaloniaInputPump"/> can forward it on its own - the
+    /// one key that has to reach Avalonia before anything is focused, to establish focus at all - and so
+    /// the gamepad D-pad's Tab/Shift+Tab translation shares the same mapping rather than repeating it.
+    /// </summary>
+    public static readonly (KeyboardKey Raylib, AvKey Key, PhysicalKey Physical) Tab =
+        (KeyboardKey.Tab, AvKey.Tab, PhysicalKey.Tab);
+
+    /// <summary>
     /// Every raylib key with an Avalonia equivalent, paired with its physical (layout independent)
     /// counterpart. The input pump polls exactly these each frame.
     /// </summary>
@@ -64,7 +72,7 @@ internal static class KeyMap
         (KeyboardKey.Space, AvKey.Space, PhysicalKey.Space),
         (KeyboardKey.Escape, AvKey.Escape, PhysicalKey.Escape),
         (KeyboardKey.Enter, AvKey.Enter, PhysicalKey.Enter),
-        (KeyboardKey.Tab, AvKey.Tab, PhysicalKey.Tab),
+        Tab,
         (KeyboardKey.Backspace, AvKey.Back, PhysicalKey.Backspace),
         (KeyboardKey.Insert, AvKey.Insert, PhysicalKey.Insert),
         (KeyboardKey.Delete, AvKey.Delete, PhysicalKey.Delete),
@@ -120,13 +128,6 @@ internal static class KeyMap
         (KeyboardKey.KpEnter, AvKey.Enter, PhysicalKey.NumPadEnter),
         (KeyboardKey.KpEqual, AvKey.OemPlus, PhysicalKey.NumPadEqual)
     ];
-
-    /// <summary>
-    /// Tab's own mapping, singled out so <see cref="AvaloniaInputPump"/> can forward it on its own -
-    /// the one key that has to reach Avalonia before anything is focused, to establish focus at all.
-    /// </summary>
-    public static readonly (KeyboardKey Raylib, AvKey Key, PhysicalKey Physical) Tab =
-        (KeyboardKey.Tab, AvKey.Tab, PhysicalKey.Tab);
 
     /// <summary>Reads the currently held modifier keys and mouse buttons.</summary>
     public static RawInputModifiers GetModifiers()

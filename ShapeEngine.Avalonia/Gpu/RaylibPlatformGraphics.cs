@@ -17,7 +17,7 @@ internal sealed class RaylibPlatformGraphics : IPlatformGraphics, IDisposable
 
     public RaylibGlContext GetSharedContext()
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref refCount) == 0, this);
+        ObjectDisposedException.ThrowIf(refCount == 0, this);
 
         return context ??= new RaylibGlContext();
     }
@@ -27,11 +27,13 @@ internal sealed class RaylibPlatformGraphics : IPlatformGraphics, IDisposable
 
     IPlatformGraphicsContext IPlatformGraphics.GetSharedContext() => GetSharedContext();
 
-    public void AddRef() => Interlocked.Increment(ref refCount);
+    // Only ever touched from the game loop thread - same invariant as the rest of this integration -
+    // so a plain counter is enough; no atomics needed.
+    public void AddRef() => refCount++;
 
     public void Release()
     {
-        if (Interlocked.Decrement(ref refCount) == 0) Dispose();
+        if (--refCount == 0) Dispose();
     }
 
     public void Dispose()

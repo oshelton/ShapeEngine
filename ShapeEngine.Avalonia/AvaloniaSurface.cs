@@ -276,26 +276,16 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     #region Content, sizing, input arbitration and cursor
 
     /// <summary>Puts the content into the top level, wrapped for scaling when asked for.</summary>
-    /// <remarks>
-    /// Detached before reattaching, because a control cannot be added to a new parent while the old one
-    /// still holds it.
-    /// </remarks>
     private void ApplyContent()
     {
-        if (scaleBox is not null) scaleBox.Child = null;
-        TopLevel.Content = null;
-
-        if (content is null) return;
-
-        if (scaleBox is not null)
-        {
-            scaleBox.Child = content;
-            TopLevel.Content = scaleBox;
-        }
-        else
+        if (scaleBox is null)
         {
             TopLevel.Content = content;
+            return;
         }
+
+        scaleBox.Child = content;
+        TopLevel.Content = scaleBox;
     }
 
     /// <summary>Matches the surface framebuffer to the placement texture.</summary>

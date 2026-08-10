@@ -128,9 +128,7 @@ public sealed class ShapeEngineDirectView : Control
         /// </summary>
         /// <remarks>
         /// The stencil test is the one that matters: Skia clips with it and leaves it enabled, so
-        /// raylib's geometry is silently rejected - no error, no output, nothing to debug from. The blend
-        /// mode is toggled to force rlgl to reissue <c>glBlendFunc</c>, which it otherwise skips because
-        /// its cached mode still looks correct.
+        /// raylib's geometry is silently rejected - no error, no output, nothing to debug from.
         /// </remarks>
         private static void PrepareRaylibState(GlInterface gl)
         {
@@ -139,8 +137,7 @@ public sealed class ShapeEngineDirectView : Control
             gl.Disable(GlConsts.GL_CULL_FACE);
             gl.Enable(GlBlend);
 
-            Rlgl.SetBlendMode(BlendMode.Additive);
-            Rlgl.SetBlendMode(BlendMode.Alpha);
+            RlglStateGuard.ForceAlphaBlendMode();
         }
 
         /// <summary>Converts Skia's 2D canvas transform into the 4x4 rlgl expects.</summary>

@@ -1,4 +1,5 @@
 using Avalonia.OpenGL;
+using R3;
 
 namespace ShapeEngine.Avalonia.Gpu;
 
@@ -26,9 +27,9 @@ internal sealed class RaylibGlContext : IGlContext
 
     public bool IsLost => false;
 
-    public IDisposable MakeCurrent() => EmptyDisposable.Instance;
+    public IDisposable MakeCurrent() => Disposable.Empty;
 
-    public IDisposable EnsureCurrent() => EmptyDisposable.Instance;
+    public IDisposable EnsureCurrent() => Disposable.Empty;
 
     public bool IsSharedWith(IGlContext context) => ReferenceEquals(this, context);
 

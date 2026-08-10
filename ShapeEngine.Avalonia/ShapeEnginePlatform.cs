@@ -46,7 +46,6 @@ internal static class ShapeEnginePlatform
             .Bind<IDispatcherImpl>().ToConstant(dispatcherImpl)
             .Bind<IKeyboardDevice>().ToConstant(ShapeEngineDevices.Keyboard)
             .Bind<IPlatformGraphics>().ToConstant(graphics)
-            .Bind<IPlatformIconLoader>().ToConstant(new StubPlatformIconLoader())
             .Bind<IPlatformSettings>().ToConstant(new DefaultPlatformSettings())
             .Bind<IRenderTimer>().ToConstant(timer)
             .Bind<IRenderLoop>().ToConstant(RenderLoop.FromTimer(timer))
