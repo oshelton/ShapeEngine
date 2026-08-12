@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -13,13 +12,18 @@ namespace Examples.Scenes.ExampleScenes.AvaloniaExampleSource;
 /// <remarks>
 /// Every control here covers a part of the integration that is easy to get wrong: a translucent
 /// background (premultiplied alpha), rounded corners (Skia's stencil buffer), a <see cref="TextBox"/>
-/// (text input, focus arbitration, I-beam cursor), a <see cref="ComboBox"/> (overlay popups), a
-/// scrolling <see cref="ListBox"/> (mouse wheel) and an indeterminate <see cref="ProgressBar"/> (the
-/// animation clock).
+/// (text input, focus arbitration, I-beam cursor), a <see cref="ComboBox"/> (overlay popups) and an
+/// indeterminate <see cref="ProgressBar"/> (the animation clock).
+/// <para>
+/// The whole content sits in a <see cref="ScrollViewer"/> rather than a bare <see cref="StackPanel"/> -
+/// <see cref="AvaloniaFullWindowExample"/>'s <c>DockPanel</c> centre can end up shorter than this content
+/// wants, and a <c>StackPanel</c> alone neither scrolls nor clips when that happens, it just overflows.
+/// There used to be a <see cref="ListBox"/> here too; removed rather than fixed, since nothing in this
+/// panel actually needed a log.
+/// </para>
 /// </remarks>
 public sealed class AvaloniaDemoPanel : ViewBase
 {
-    private readonly ObservableCollection<string> logEntries = [];
     private readonly string title;
     private readonly string description;
 
@@ -43,44 +47,44 @@ public sealed class AvaloniaDemoPanel : ViewBase
             .CornerRadius(new CornerRadius(12))
             .Padding(new Thickness(18))
             .Child(
-                new StackPanel()
-                    .Spacing(10)
-                    .Children(
-                        new TextBlock()
-                            .Text(title)
-                            .FontSize(22)
-                            .FontWeight(FontWeight.SemiBold)
-                            .TextWrapping(TextWrapping.Wrap)
-                            .Foreground(Brushes.White),
-                        new TextBlock()
-                            .Text(description)
-                            .TextWrapping(TextWrapping.Wrap)
-                            .Foreground(Brushes.DarkGray),
-                        new Button()
-                            .Content("Click me")
-                            .HorizontalAlignment(HorizontalAlignment.Stretch)
-                            .HorizontalContentAlignment(HorizontalAlignment.Center)
-                            .OnClick(_ => RegisterClick()),
-                        new TextBlock()
-                            .Ref(out clickCountText)
-                            .Text("Not clicked yet")
-                            .Foreground(Brushes.Gainsboro),
-                        new TextBox()
-                            .PlaceholderText("Type here - the game stops seeing the keyboard")
-                            .OnTextChanged(e => logEntries.Insert(0, $"Text: \"{((TextBox)e.Source!).Text}\"")),
-                        new ComboBox()
-                            .HorizontalAlignment(HorizontalAlignment.Stretch)
-                            .PlaceholderText("Pick a shape (overlay popup)")
-                            .ItemsSource(new[] { "Circle", "Rect", "Triangle", "Polygon", "Polyline", "Segment" }),
-                        new ListBox()
-                            .ItemsSource(logEntries)
-                            .Height(110),
-                        new ProgressBar()
-                            .IsIndeterminate(true),
-                        new TextBlock()
-                            .Ref(out statusText)
-                            .TextWrapping(TextWrapping.Wrap)
-                            .Foreground(Brushes.Gainsboro)));
+                // Scrolls rather than overflows when the container - the DockPanel centre in
+                // AvaloniaFullWindowExample can be quite short - is shorter than the content wants.
+                new ScrollViewer()
+                    .Content(
+                        new StackPanel()
+                            .Spacing(10)
+                            .Children(
+                                new TextBlock()
+                                    .Text(title)
+                                    .FontSize(22)
+                                    .FontWeight(FontWeight.SemiBold)
+                                    .TextWrapping(TextWrapping.Wrap)
+                                    .Foreground(Brushes.White),
+                                new TextBlock()
+                                    .Text(description)
+                                    .TextWrapping(TextWrapping.Wrap)
+                                    .Foreground(Brushes.DarkGray),
+                                new Button()
+                                    .Content("Click me")
+                                    .HorizontalAlignment(HorizontalAlignment.Stretch)
+                                    .HorizontalContentAlignment(HorizontalAlignment.Center)
+                                    .OnClick(_ => RegisterClick()),
+                                new TextBlock()
+                                    .Ref(out clickCountText)
+                                    .Text("Not clicked yet")
+                                    .Foreground(Brushes.Gainsboro),
+                                new TextBox()
+                                    .PlaceholderText("Type here - the game stops seeing the keyboard"),
+                                new ComboBox()
+                                    .HorizontalAlignment(HorizontalAlignment.Stretch)
+                                    .PlaceholderText("Pick a shape (overlay popup)")
+                                    .ItemsSource(new[] { "Circle", "Rect", "Triangle", "Polygon", "Polyline", "Segment" }),
+                                new ProgressBar()
+                                    .IsIndeterminate(true),
+                                new TextBlock()
+                                    .Ref(out statusText)
+                                    .TextWrapping(TextWrapping.Wrap)
+                                    .Foreground(Brushes.Gainsboro))));
 
     /// <summary>Shows the surface's live state, updated by the scene each frame.</summary>
     public void SetStatus(string status) => statusText.Text = status;
@@ -89,6 +93,5 @@ public sealed class AvaloniaDemoPanel : ViewBase
     {
         clickCount++;
         clickCountText.Text = $"Clicked {clickCount} time{(clickCount == 1 ? String.Empty : "s")}";
-        logEntries.Insert(0, $"Click #{clickCount} at {DateTime.Now:HH:mm:ss}");
     }
 }
