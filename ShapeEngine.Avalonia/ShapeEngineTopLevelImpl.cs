@@ -152,6 +152,10 @@ internal sealed class ShapeEngineTopLevelImpl : ITopLevelImpl
 
     void ITopLevelImpl.SetInputRoot(IInputRoot root) => inputRoot = root;
 
+    /// <summary>The input root Avalonia handed this top level, for raw input other than the kinds above.</summary>
+    /// <remarks>Used by <see cref="ShapeEngineDragSource"/>, which needs one to construct its own raw drag events.</remarks>
+    internal IInputRoot? InputRoot => inputRoot;
+
     private bool Send(RawInputEventArgs args)
     {
         if (Input is not { } input) return false;

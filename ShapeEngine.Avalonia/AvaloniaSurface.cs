@@ -221,6 +221,10 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
         inputPump.Pump(GetPointerPosition(), WantsPointer || hasLockedMouse, WantsKeyboard || hasLockedKeyboard);
         ApplyInputLocks();
         SyncOverrideActions();
+
+        // Harmless to call from every surface every frame: a no-op once nothing is dragging, or once
+        // whichever surface actually has the pointer this frame has already reported it.
+        ShapeEngineDragSource.Pump(this);
     }
 
     /// <summary>
@@ -306,9 +310,11 @@ public sealed class AvaloniaSurface : Game.CustomEvent, IDisposable
     /// <summary>The cursor position in Avalonia's client coordinate space.</summary>
     /// <remarks>
     /// The engine has already mapped the mouse into the texture's pixel space for its anchor, so all that
-    /// remains is the conversion to device independent pixels.
+    /// remains is the conversion to device independent pixels. Internal rather than private: also used by
+    /// <see cref="ShapeEngineDragSource"/>, which needs a surface's own local pointer position to feed a
+    /// drag into it once the drag has moved onto this surface.
     /// </remarks>
-    private Point GetPointerPosition()
+    internal Point GetPointerPosition()
     {
         var position = placement.GameUiScreenInfo.MousePos;
         var scaling = impl.RenderScaling;

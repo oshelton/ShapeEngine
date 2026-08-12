@@ -74,6 +74,7 @@ namespace Examples.Scenes
                 examples.Add(new AvaloniaFullWindowExample());
                 examples.Add(new AvaloniaShaderExample());
                 examples.Add(new AvaloniaGalleryExample());
+                examples.Add(new AvaloniaDragDropExample());
             }
 
             buttonContainer = new ControlNodeContainer

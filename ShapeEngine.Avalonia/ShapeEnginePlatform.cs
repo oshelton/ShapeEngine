@@ -6,6 +6,7 @@ using Avalonia.Rendering;
 using Avalonia.Threading;
 using ShapeEngine.Avalonia.Gpu;
 using ShapeEngine.Avalonia.Input;
+using ShapeEngine.Core.GameDef;
 using AvCompositor = Avalonia.Rendering.Composition.Compositor;
 
 namespace ShapeEngine.Avalonia;
@@ -39,18 +40,24 @@ internal static class ShapeEnginePlatform
         var graphics = new RaylibPlatformGraphics();
         var timer = new ManualRenderTimer();
         var dispatcherImpl = new ShapeEngineDispatcherImpl(Thread.CurrentThread);
+        var dragSource = new ShapeEngineDragSource();
 
         AvaloniaLocator.CurrentMutable
             .Bind<IClipboard>().ToConstant(new ShapeEngineClipboard())
             .Bind<ICursorFactory>().ToConstant(new ShapeEngineCursorFactory())
             .Bind<IDispatcherImpl>().ToConstant(dispatcherImpl)
             .Bind<IKeyboardDevice>().ToConstant(ShapeEngineDevices.Keyboard)
+            .Bind<IPlatformDragSource>().ToConstant(dragSource)
             .Bind<IPlatformGraphics>().ToConstant(graphics)
             .Bind<IPlatformSettings>().ToConstant(new DefaultPlatformSettings())
             .Bind<IRenderTimer>().ToConstant(timer)
             .Bind<IRenderLoop>().ToConstant(RenderLoop.FromTimer(timer))
             .Bind<PlatformHotkeyConfiguration>().ToConstant(
                 new PlatformHotkeyConfiguration(commandModifiers: KeyModifiers.Control));
+
+        // Also a Game.CustomEvent - see its constructor remarks for why it needs to run once per frame,
+        // after every surface, rather than only being resolved through Avalonia's own service locator.
+        Game.Instance.AddCustomEvent(dragSource);
 
         platformGraphics = graphics;
         renderTimer = timer;

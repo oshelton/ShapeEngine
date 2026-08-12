@@ -93,7 +93,7 @@ public abstract class AvaloniaExampleSceneBase : ExampleScene
     {
         foreach (var (position, _, radius, color) in circles)
         {
-            new Circle(position, radius).Draw(color, 0.8f);
+            new Circle(position, radius).Draw(color, 0.9f);
         }
     }
 

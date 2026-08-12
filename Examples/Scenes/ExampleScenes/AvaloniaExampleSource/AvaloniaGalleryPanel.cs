@@ -339,14 +339,14 @@ public sealed class AvaloniaGalleryPanel : ViewBase
         // Stays within 0.46 * unit at its largest, leaving a safety margin inside the 0.5 * unit the
         // control's bounds actually allow.
         var glowRadius = unit * (0.40f + breathe * 0.06f);
-        new Circle(center, glowRadius).Draw(color.SetAlpha((byte)(30 + breathe * 40)));
+        new Circle(center, glowRadius).Draw(color.SetAlpha((byte)(30 + breathe * 40)), 0.9f);
 
         // Shrunk so the icon always sits inside the glow, whichever shape it is.
         DrawIcon(bounds, shape, color, scale: 0.8f);
 
         var orbit = phase * 1.3f;
         var highlightPos = center + new SeVec2(MathF.Cos(orbit), MathF.Sin(orbit)) * unit * 0.4f;
-        new Circle(highlightPos, unit * 0.045f).Draw(color.Lerp(ColorRgba.White, 0.6f));
+        new Circle(highlightPos, unit * 0.045f).Draw(color.Lerp(ColorRgba.White, 0.6f), 0.9f);
     }
 
     private Control BuildRadioButtonsRow()
@@ -575,7 +575,7 @@ public sealed class AvaloniaGalleryPanel : ViewBase
 
             if (ShowOrbitRings)
             {
-                new Circle(center, radius).DrawLines(2f, color.SetAlpha(150), 4f);
+                new Circle(center, radius).DrawLines(2f, color.SetAlpha(150), 0.9f);
             }
 
             // Each ring turns a little slower than the one inside it, and every other one reverses.
@@ -587,12 +587,12 @@ public sealed class AvaloniaGalleryPanel : ViewBase
                 var offset = angle + i * MathF.Tau / 3f;
                 var position = center + new SeVec2(MathF.Cos(offset), MathF.Sin(offset)) * radius;
 
-                new Circle(position, unit * (0.045f - ring * 0.005f)).Draw(color, 1.0f);
+                new Circle(position, unit * (0.045f - ring * 0.005f)).Draw(color, 0.9f);
             }
         }
 
         var pulse = 0.5f + 0.5f * MathF.Sin(elapsed * 2.4f);
-        new Circle(center, unit * (0.05f + pulse * 0.03f)).Draw(new ColorRgba(255, 255, 255, 200), 1.0f);
+        new Circle(center, unit * (0.05f + pulse * 0.03f)).Draw(new ColorRgba(255, 255, 255, 200), 0.9f);
     }
 
     private Control BuildDirectTile()
@@ -658,10 +658,10 @@ public sealed class AvaloniaGalleryPanel : ViewBase
             var distance = unit * (0.1f + (float)random.NextDouble() * 0.55f);
             var position = center + new SeVec2(MathF.Cos(angle), MathF.Sin(angle)) * distance;
 
-            new Circle(position, unit * (0.05f + (float)random.NextDouble() * 0.1f)).Draw(accent.SetAlpha(190), 1.0f);
+            new Circle(position, unit * (0.05f + (float)random.NextDouble() * 0.1f)).Draw(accent.SetAlpha(190), 0.9f);
         }
 
-        new Circle(center, unit * 0.36f).DrawLines(2f, new ColorRgba(255, 255, 255, 120), 4f);
+        new Circle(center, unit * 0.36f).DrawLines(2f, new ColorRgba(255, 255, 255, 120), 0.9f);
     }
 
     /// <summary>
@@ -849,7 +849,7 @@ public sealed class AvaloniaGalleryPanel : ViewBase
         switch (shape)
         {
             case IconShape.Circle:
-                new Circle(center, unit * 0.42f).Draw(color);
+                new Circle(center, unit * 0.42f).Draw(color, 0.9f);
                 break;
 
             case IconShape.Square:
@@ -867,7 +867,7 @@ public sealed class AvaloniaGalleryPanel : ViewBase
             case IconShape.Ring:
                 // DrawLines straddles Radius + lineThickness with a stroke width of lineThickness * 2, so
                 // the true outer edge is Radius + 2 * lineThickness - accounted for here, not Radius alone.
-                new Circle(center, unit * 0.32f).DrawLines(unit * 0.07f, color);
+                new Circle(center, unit * 0.32f).DrawLines(unit * 0.07f, color, 0.9f);
                 break;
         }
     }
